@@ -35,25 +35,38 @@ GAME_OVER_BG_COLOR = (0,0,0,220) # Semi-transparent black for game over
 # Each shape is a list of (row_offset, col_offset) tuples
 # (0,0) is the top-left most cell of the shape's logical bounding box
 SHAPES = [
-    {"id": 0, "coords": [(0,0)], "color": (192, 192, 192), "name": "dot"},
-    {"id": 1, "coords": [(0,0), (0,1)], "color": (90, 200, 200), "name": "1x2"},
-    {"id": 2, "coords": [(0,0), (1,0)], "color": (90, 200, 200), "name": "2x1"},
-    {"id": 3, "coords": [(0,0), (0,1), (0,2)], "color": (60, 170, 220), "name": "1x3"},
-    {"id": 4, "coords": [(0,0), (1,0), (2,0)], "color": (60, 170, 220), "name": "3x1"},
-    {"id": 5, "coords": [(0,0), (0,1), (1,0), (1,1)], "color": (220, 220, 70), "name": "2x2_O"},
-    {"id": 6, "coords": [(0,0), (1,0), (1,1)], "color": (220, 150, 50), "name": "L3_1"},
-    {"id": 7, "coords": [(0,1), (1,1), (1,0)], "color": (220, 150, 50), "name": "L3_2"},
-    {"id": 8, "coords": [(0,0), (0,1), (1,1)], "color": (220, 150, 50), "name": "L3_3"},
-    {"id": 9, "coords": [(0,0), (0,1), (1,0)], "color": (220, 150, 50), "name": "L3_4"},
-    {"id": 10, "coords": [(0,0), (1,0), (2,0), (2,1)], "color": (230, 120, 40), "name": "L4"},
-    {"id": 11, "coords": [(0,1), (1,1), (2,1), (2,0)], "color": (70, 70, 200), "name": "J4"},
-    {"id": 12, "coords": [(0,0), (1,0), (2,0), (3,0)], "color": (100, 200, 235), "name": "I4v"},
-    {"id": 13, "coords": [(0,0), (0,1), (0,2), (0,3)], "color": (100, 200, 235), "name": "I4h"},
-    {"id": 14, "coords": [(0,0), (0,1), (0,2), (1,1)], "color": (190, 70, 190), "name": "T4"},
-    {"id": 15, "coords": [(0,1), (0,2), (1,0), (1,1)], "color": (70, 200, 70), "name": "S4"},
-    {"id": 16, "coords": [(0,0), (0,1), (1,1), (1,2)], "color": (200, 70, 70), "name": "Z4"},
-    {"id": 17, "coords": [(0,0),(0,1),(0,2),(1,0),(1,2),(2,0),(2,1),(2,2)], "color": (255,100,187), "name": "3x3hole"},
-    {"id": 18, "coords": [(0,0),(0,2),(1,1),(2,0),(2,2)], "color": (255,155,200), "name": "X_5block"},
+     {"id": 0, "coords": [(0,0)], "color": (192, 192, 192), "name": "dot"},
+     {"id": 1, "coords": [(0,0), (0,1)], "color": (90, 200, 200), "name": "1x2"},
+     {"id": 2, "coords": [(0,0), (1,0)], "color": (90, 200, 200), "name": "2x1"},
+     {"id": 3, "coords": [(0,0), (0,1), (0,2)], "color": (60, 170, 220), "name": "1x3"},
+     {"id": 4, "coords": [(0,0), (1,0), (2,0)], "color": (60, 170, 220), "name": "3x1"},
+     {"id": 5, "coords": [(0,0), (0,1), (1,0), (1,1)], "color": (220, 220, 70), "name": "2x2_O"},
+     {"id": 6, "coords": [(0,0), (1,0), (1,1)], "color": (220, 150, 50), "name": "L3_1"},
+     {"id": 7, "coords": [(0,1), (1,1), (1,0)], "color": (220, 150, 50), "name": "L3_2"},
+     {"id": 8, "coords": [(0,0), (0,1), (1,1)], "color": (220, 150, 50), "name": "L3_3"},
+     {"id": 9, "coords": [(0,0), (0,1), (1,0)], "color": (220, 150, 50), "name": "L3_4"},
+     {"id": 10, "coords": [(0,0), (1,0), (2,0), (2,1)], "color": (230, 120, 40), "name": "L4v"},
+     {"id": 11, "coords": [(0,1), (1,1), (2,1), (2,0)], "color": (70, 70, 200), "name": "J4"},
+     {"id": 12, "coords": [(0,0), (1,0), (2,0), (3,0)], "color": (100, 200, 235), "name": "I4v"},
+     {"id": 13, "coords": [(0,0), (0,1), (0,2), (0,3)], "color": (100, 200, 235), "name": "I4h"},
+     {"id": 14, "coords": [(0,0), (0,1), (0,2), (1,1)], "color": (190, 70, 190), "name": "T4"},
+     {"id": 15, "coords": [(0,1), (0,2), (1,0), (1,1)], "color": (70, 200, 70), "name": "S4h"},
+     {"id": 16, "coords": [(0,0), (0,1), (1,1), (1,2)], "color": (200, 70, 70), "name": "Z4h"},
+     {"id": 17, "coords": [(0,0),(0,1),(0,2),(1,0),(1,2),(2,0),(2,1),(2,2)], "color": (255,100,187), "name": "3x3hole"},
+     {"id": 18, "coords": [(0,0),(0,2),(1,1),(2,0),(2,2)], "color": (255,155,200), "name": "X_5block"},
+     {"id": 19, "coords": [(0,0), (1,0), (2,0), (3,0), (4,0)], "color": (100, 200, 235), "name": "I5v"},
+     {"id": 20, "coords": [(0,0), (0,1), (0,2), (0,3), (0,4)], "color": (100, 200, 235), "name": "I5h"},
+     {"id": 21, "coords": [(1,0), (2,0), (0,1), (1,1)], "color": (70, 200, 70), "name": "S4v"},
+     {"id": 22, "coords": [(1,0), (2,0), (1,1), (0,1)], "color": (200, 70, 70), "name": "Z4v"},
+     {"id": 23, "coords": [(0,1), (1,1), (2,1), (2,0), (2,2)], "color": (70, 200, 70), "name": "TLongV1"},
+     {"id": 24, "coords": [(0,1), (1,1), (2,1), (0,0), (0,2)], "color": (70, 200, 70), "name": "TLongV2"},
+     {"id": 25, "coords": [(1,0), (0,0), (1,1), (2,0), (1,2)], "color": (70, 200, 70), "name": "TLongH1"},
+     {"id": 26, "coords": [(1,0), (1,1), (1,2), (0,2), (2,2)], "color": (200, 70, 70), "name": "TLongH2"},
+     {"id": 27, "coords": [(0,0), (1,1)], "color": (200, 70, 70), "name": "2x2diag1"},
+     {"id": 28, "coords": [(1,0), (0,1)], "color": (200, 70, 70), "name": "2x2diag2"},
+     {"id": 29, "coords": [(0,0), (1,1), (2,2)], "color": (200, 70, 70), "name": "3x3diag1"},
+     {"id": 30, "coords": [(2,0), (1,1), (0,2)], "color": (200, 70, 70), "name": "3x3diag2"},
+     {"id": 31, "coords": [(0,1), (1,1), (2,1), (2,0)], "color": (230, 120, 40), "name": "L4v1"}
 ]
 
 # --- Pygame Setup ---
@@ -339,6 +352,9 @@ while running:
                     # Check if all 3 pieces from current set are placed
                     if all(p_info["placed"] for p_info in available_pieces_info):
                         generate_and_setup_new_pieces() # Get new set of 3
+                        
+                        while can_any_available_piece_be_placed() is False:
+                            generate_and_setup_new_pieces()
 
                     # After placing a piece or getting new ones, check for game over
                     if not can_any_available_piece_be_placed():
