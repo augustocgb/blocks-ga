@@ -72,6 +72,7 @@ FONT_RESTART = pygame.font.SysFont('Arial', FONT_SIZE_SMALL)
 grid_data = []
 available_pieces_info = [] # Stores dicts for the 3 current pieces: {piece_data, draw_rect, click_rect, preview_cs, original_pos, placed}
 score = 0
+streak = 0
 game_over_flag = False
 
 dragging_piece = None # Dict: {data (shape,color), screen_pos_x, screen_pos_y, original_piece_info_index}
@@ -186,13 +187,12 @@ def is_move_valid(piece_coords, target_grid_row, target_grid_col):
     return True
 
 def commit_piece_to_grid(piece_data_to_commit, target_grid_row, target_grid_col):
-    global grid_data, score
+    global grid_data
     for r_offset, c_offset in piece_data_to_commit["coords"]:
         grid_data[target_grid_row + r_offset][target_grid_col + c_offset] = piece_data_to_commit["color"]
-    score += len(piece_data_to_commit["coords"]) # Add points for each cell of the placed piece
 
 def process_line_clears():
-    global grid_data, score
+    global grid_data, streak
     
     rows_to_clear_indices = []
     for r_idx in range(GRID_SIZE):
@@ -216,14 +216,17 @@ def process_line_clears():
             
     total_lines_cleared = len(rows_to_clear_indices) + len(cols_to_clear_indices)
 
-    # Scoring for line clears
-    if total_lines_cleared == 1: score += 100
-    elif total_lines_cleared == 2: score += 300
-    elif total_lines_cleared == 3: score += 500
-    elif total_lines_cleared == 4: score += 800
-    elif total_lines_cleared >= 5: score += 800 + (total_lines_cleared - 4) * 400 # Bonus for 5+
+    # Increment streak if cleared any lines
+    if total_lines_cleared == 0:
+        streak = 0
+    else:
+        streak += total_lines_cleared
 
-    return total_lines_cleared > 0
+    return total_lines_cleared
+
+def process_score(piece_data_to_commit):
+    global score, streak
+    score += (len(piece_data_to_commit["coords"]) + (streak * 18))
 
 def can_any_available_piece_be_placed():
     for item_info in available_pieces_info:
@@ -330,6 +333,8 @@ while running:
                     available_pieces_info[original_index]["placed"] = True
                     
                     process_line_clears()
+
+                    process_score(dragging_piece["data"])
 
                     # Check if all 3 pieces from current set are placed
                     if all(p_info["placed"] for p_info in available_pieces_info):
