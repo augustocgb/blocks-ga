@@ -1,5 +1,5 @@
 import random
-import game
+import game_logic as game
 
 class Individual(object):
     def __init__(self, chromosome_length = 5):
@@ -65,6 +65,7 @@ class GeneticAlgorithm:
         self.chromosome_length = chromosome_length
         self.mutation_rate = mutation_rate
         self.crossover_rate = crossover_rate
+        self.elitism_count = elitism_count
         
         if self.elitism_count >= self.population_size:
             self.elitism_count = max(0, self.population_size -1)
@@ -110,7 +111,7 @@ class GeneticAlgorithm:
         for i in range(len(individual.chromosome)):
             if random.random() < self.mutation_rate:
                 individual.chromosome[i] += random.gauss(mu, sigma)
-                individual.chromosome[i] = max(min(individual.chromosome[i], 1.0), -1.0)
+                #individual.chromosome[i] = max(min(individual.chromosome[i], 1.0), -1.0)
 
         return individual
 
@@ -135,7 +136,8 @@ class GeneticAlgorithm:
         self.population = new_population
         # Best individual
         return self.population[0]
-      def run_evolution(self, game_function, n_generations):
+    
+    def run_evolution(self, game_function, n_generations):
         self.initialize_population()
         best_fitness = float('-inf')
         best_individual = None

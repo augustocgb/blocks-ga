@@ -2,7 +2,6 @@ import pygame
 import random
 import sys
 
-# --- Constants ---
 GRID_SIZE = 8
 CELL_SIZE = 40
 GRID_LINE_WIDTH = 1
@@ -10,8 +9,7 @@ BOARD_WIDTH = GRID_SIZE * CELL_SIZE
 BOARD_HEIGHT = GRID_SIZE * CELL_SIZE
 
 SCORE_AREA_HEIGHT = 40
-# Adjust PIECE_PREVIEW_AREA_HEIGHT based on preview_cell_size and max piece height
-# Max piece dimension is 4 cells (e.g., I4v). preview_cell_size = CELL_SIZE * 0.6
+
 PREVIEW_CELL_SIZE_RATIO = 0.65
 MAX_PREVIEW_PIECE_DIM_CELLS = 4
 PIECE_PREVIEW_AREA_TOP_MARGIN = 25
@@ -24,12 +22,11 @@ PIECE_PREVIEW_AREA_HEIGHT = (PIECE_PREVIEW_AREA_TOP_MARGIN +
 SCREEN_WIDTH = BOARD_WIDTH
 SCREEN_HEIGHT = BOARD_HEIGHT + SCORE_AREA_HEIGHT + PIECE_PREVIEW_AREA_HEIGHT
 
-# Colors
-BACKGROUND_COLOR = (20, 20, 20) # Darker background
-GRID_COLOR = (50, 50, 50)     # Darker grid lines
-EMPTY_CELL_COLOR = (35, 35, 35) # Empty cell color on board
+BACKGROUND_COLOR = (20, 20, 20)
+GRID_COLOR = (50, 50, 50)
+EMPTY_CELL_COLOR = (35, 35, 35)
 TEXT_COLOR = (220, 220, 220)
-GAME_OVER_BG_COLOR = (0,0,0,220) # Semi-transparent black for game over
+GAME_OVER_BG_COLOR = (0,0,0,220)
 
 # --- Block Shapes ---
 # Each shape is a list of (row_offset, col_offset) tuples
@@ -69,6 +66,102 @@ SHAPES = [
      {"id": 31, "coords": [(0,1), (1,1), (2,1), (2,0)], "color": (230, 120, 40), "name": "L4v1"}
 ]
 
+def get_all_valid_moves(grid_data, available_pieces):
+    possible_moves = []
+    for piece_idx, piece_info in enumerate(available_pieces):
+        if not piece_info["placed"]:
+            piece_data = piece_info["piece_data"]
+            for r in range(GRID_SIZE):
+                for c in range(GRID_SIZE):
+                    # Check if piece can be placed at this position
+                    valid = True
+                    for r_offset, c_offset in piece_data["coords"]:
+                        check_r = r + r_offset
+                        check_c = c + c_offset
+                        if not (0 <= check_r < GRID_SIZE and 0 <= check_c < GRID_SIZE):
+                            valid = False
+                            break
+                        if grid_data[check_r][check_c] != EMPTY_CELL_COLOR:
+                            valid = False
+                            break
+                    
+                    if valid:
+                        possible_moves.append({
+                            'piece_index': piece_idx,
+                            'piece_data': piece_data,
+                            'target_row': r,
+                            'target_col': c
+                        })
+    return possible_moves
+
+def count_holes_and_blockades(grid_data_state):
+    holes = 0
+    for c in range(GRID_SIZE):
+        has_block = False
+        for r in range(GRID_SIZE):
+            if grid_data_state[r][c] != EMPTY_CELL_COLOR:
+                has_block = True
+            elif has_block:
+                holes += 1
+    return holes
+
+def get_aggregate_height_and_bumpiness(grid_data_state):
+    col_heights = []
+    for c in range(GRID_SIZE):
+        for r in range(GRID_SIZE):
+            if grid_data_state[r][c] != EMPTY_CELL_COLOR:
+                col_heights.append(GRID_SIZE - r)
+                break
+        else:
+            col_heights.append(0)
+    
+    aggregate_height = sum(col_heights)
+    bumpiness = sum(abs(col_heights[i] - col_heights[i+1]) for i in range(len(col_heights)-1))
+    max_height = max(col_heights) if col_heights else 0
+    
+    return aggregate_height, bumpiness, max_height
+
+def count_potential_lines_cleared(grid_after_move):
+    lines = 0
+    # Check rows
+    for r in range(GRID_SIZE):
+        if all(cell != EMPTY_CELL_COLOR for cell in grid_after_move[r]):
+            lines += 1
+    # Check columns
+    for c in range(GRID_SIZE):
+        if all(grid_after_move[r][c] != EMPTY_CELL_COLOR for r in range(GRID_SIZE)):
+            lines += 1
+    return lines
+
+def count_contact_points(grid_before_move, piece_coords, r_target, c_target):
+    contacts = 0
+    for r_offset, c_offset in piece_coords:
+        r, c = r_target + r_offset, c_target + c_offset
+        
+        # Check cell below
+        if r + 1 >= GRID_SIZE:
+            contacts += 1  # Floor contact
+        elif grid_before_move[r + 1][c] != EMPTY_CELL_COLOR:
+            contacts += 1
+            
+        # Check cell above
+        if r - 1 >= 0 and grid_before_move[r - 1][c] != EMPTY_CELL_COLOR:
+            contacts += 1
+            
+        # Check cell to right
+        if c + 1 >= GRID_SIZE:
+            contacts += 1  # Wall contact
+        elif grid_before_move[r][c + 1] != EMPTY_CELL_COLOR:
+            contacts += 1
+            
+        # Check cell to left
+        if c - 1 < 0:
+            contacts += 1  # Wall contact
+        elif grid_before_move[r][c - 1] != EMPTY_CELL_COLOR:
+            contacts += 1
+            
+    return contacts
+
 # --- Pygame Setup ---
 pygame.init()
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
@@ -83,7 +176,7 @@ FONT_RESTART = pygame.font.SysFont('Arial', FONT_SIZE_SMALL)
 
 # --- Game State Variables ---
 grid_data = []
-available_pieces_info = [] # Stores dicts for the 3 current pieces: {piece_data, draw_rect, click_rect, preview_cs, original_pos, placed}
+available_pieces_info = []
 score = 0
 streak = 0
 game_over_flag = False
@@ -91,6 +184,7 @@ game_over_flag = False
 dragging_piece = None # Dict: {data (shape,color), screen_pos_x, screen_pos_y, original_piece_info_index}
 drag_offset_from_piece_topleft_x = 0
 drag_offset_from_piece_topleft_y = 0
+
 
 
 # --- Helper Functions ---
@@ -287,7 +381,6 @@ def initialize_or_reset_game():
     if not can_any_available_piece_be_placed():
         game_over_flag = True
 
-
 # --- Main Game Setup ---
 initialize_or_reset_game()
 
@@ -352,7 +445,7 @@ while running:
                     # Check if all 3 pieces from current set are placed
                     if all(p_info["placed"] for p_info in available_pieces_info):
                         generate_and_setup_new_pieces() # Get new set of 3
-                        
+
                         while can_any_available_piece_be_placed() is False:
                             generate_and_setup_new_pieces()
 
