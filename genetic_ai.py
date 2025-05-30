@@ -74,8 +74,8 @@ class GeneticAlgorithm:
     def eval_pop_fitness(self, game_function):
         for i, individual in enumerate(self.population):
             individual.fitness, individual.best_score = game_function(individual.chromosome)
-            print(f"Individual {i + 1} average fitness: {individual.fitness}")
-            print(f"Individual {i + 1} best score: {individual.best_score}")
+            #print(f"Individual {i + 1} average fitness: {individual.fitness}")
+            #print(f"Individual {i + 1} best score: {individual.best_score}")
 
             if individual.best_score > self.best_individual_current.best_score:
                 self.best_individual_current = individual
@@ -176,6 +176,10 @@ class GeneticAlgorithm:
             print(f"{'='*60}")
 
             self.population = self.new_generation()
+
+        print("\nEvolution completed! Testing best chromosome...")
+        best_chromosome_avg_fitness, best_chromosome_best_score = game_function(self.best_individual_all_time.chromosome, num_games=100)
+        print("\nBest chromosome tested.\n Best Score:", best_chromosome_best_score, "\n Average Fitness:", best_chromosome_avg_fitness)
         
         return self.best_individual_all_time, (generations, best_scores, avg_scores, best_finess, avg_fitness)
 
