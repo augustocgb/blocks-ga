@@ -188,9 +188,7 @@ class GeneticAlgorithm:
 
             self.population = self.new_generation()
 
-        print("\nEvolution completed! Testing best chromosome...")
-        best_chromosome_avg_fitness, best_chromosome_best_score = game_function(self.best_individual_all_time.chromosome, num_games=100)
-        print("\nBest chromosome tested.\n Best Score:", best_chromosome_best_score, "\n Average Fitness:", best_chromosome_avg_fitness)
+        print("\nEvolution completed!")
         
         return self.best_individual_all_time, (generations, best_scores, avg_scores, best_finess, avg_fitness)
 

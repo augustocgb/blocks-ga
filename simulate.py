@@ -118,10 +118,12 @@ def evaluate_chromosome(chromosome, num_games=3, seed=None):
     total_score = 0
     best_score = 0
 
-    if seed is not None:
-        random.seed(seed)
-
     for game_num in range(num_games):
+        if seed is not None:
+            # Seed per game to ensure w_plus and w_minus face the exact same games
+            # independently of how long previous games lasted.
+            random.seed(seed + game_num)
+            
         score = simulate_game(chromosome)
 
         if score > best_score:
@@ -130,7 +132,7 @@ def evaluate_chromosome(chromosome, num_games=3, seed=None):
         total_score += score
 
     if seed is not None:
-        random.seed()
+        random.seed() # Reset seed after evaluation
 
     return int(total_score / num_games), best_score
 

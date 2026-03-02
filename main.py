@@ -63,8 +63,10 @@ def run_comparison():
 
         ga_best_ind, ga_stats = ga.run_evolution(evaluate_ga, GA_N_GENERATIONS)
         ga_results = ga_stats
+        
         ga_best_game_history = get_best_game_history()
-        print(f"GA Best Score Reached: {ga_best_ind.best_score}")
+        ga_best_score_val = ga_best_game_history['final_score'] if ga_best_game_history else 0
+        print(f"GA Best Score Reached: {ga_best_score_val}")
 
     if run_sgd:
         print("\n[SGD] Running Stochastic Gradient Descent...")
@@ -82,9 +84,10 @@ def run_comparison():
         
         sgd_best_chrom, sgd_stats = sgd.train(evaluate_sgd, SGD_ITERATIONS)
         sgd_results = sgd_stats
-        sgd_best_score_val = sgd.best_score_all_time
+        
         sgd_best_game_history = get_best_game_history()
-        print(f"SGD Best Score Reached: {sgd.best_score_all_time}")
+        sgd_best_score_val = sgd_best_game_history['final_score'] if sgd_best_game_history else 0
+        print(f"SGD Best Score Reached: {sgd_best_score_val}")
 
     if run_hybrid:
         print("\n[Hybrid] Running Hybrid Optimizer...")
@@ -102,8 +105,10 @@ def run_comparison():
         
         hybrid_data = optimizer.run()
         hybrid_results = hybrid_data
-        hybrid_best_score_val = hybrid_data['best_score']
+        
         hybrid_best_game_history = get_best_game_history()
+        hybrid_best_score_val = hybrid_best_game_history['final_score'] if hybrid_best_game_history else 0
+        print(f"Hybrid Best Score Reached: {hybrid_best_score_val}")
 
     if run_ga or run_sgd or run_hybrid:
         plt.figure(figsize=(12, 6))
@@ -137,12 +142,12 @@ def run_comparison():
 
     print("\n--- Final Results ---")
     if run_ga and ga_best_ind:
-        print("Genetic Algorithm Best Score:", ga_best_ind.best_score)
+        print("Genetic Algorithm Best Score:", ga_best_score_val)
         print("GA Weights:", [f"{w:.3f}" for w in ga_best_ind.chromosome])
         print("-" * 30)
     
     if run_sgd and sgd_best_chrom:
-        print("SGD Best Score (All Time):", sgd_best_score_val)
+        print("SGD Best Score:", sgd_best_score_val)
         print("SGD Weights:", [f"{w:.3f}" for w in sgd_best_chrom])
         print("-" * 30)
 

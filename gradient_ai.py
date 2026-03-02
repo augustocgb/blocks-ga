@@ -36,8 +36,16 @@ class GradientDescentAI:
             w_plus[i] += self.perturbation_size
             w_minus[i] -= self.perturbation_size
             
-            score_plus, _ = game_function(w_plus, num_games=num_games_per_eval, seed=eval_seed)
-            score_minus, _ = game_function(w_minus, num_games=num_games_per_eval, seed=eval_seed)
+            score_plus, score_plus_best = game_function(w_plus, num_games=num_games_per_eval, seed=eval_seed)
+            score_minus, score_minus_best = game_function(w_minus, num_games=num_games_per_eval, seed=eval_seed)
+            
+            if score_plus_best > self.best_score_all_time:
+                self.best_score_all_time = score_plus_best
+                self.best_chromosome_all_time = w_plus[:]
+                
+            if score_minus_best > self.best_score_all_time:
+                self.best_score_all_time = score_minus_best
+                self.best_chromosome_all_time = w_minus[:]
             
             gradient[i] = (score_plus - score_minus) / (2 * self.perturbation_size)
             
@@ -51,6 +59,11 @@ class GradientDescentAI:
         current_avg, current_best = game_function(self.chromosome, num_games=10)
         self.best_score_all_time = current_best
         self.best_chromosome_all_time = self.chromosome[:]
+        
+        # Record initial inherited performance (Iteration 0)
+        history_iterations.append(0)
+        history_avg_scores.append(current_avg)
+        history_best_scores.append(current_best)
         
         for iteration in range(n_iterations):
             print(f"\n{'='*60}")
@@ -78,7 +91,7 @@ class GradientDescentAI:
                 self.best_score_all_time = best_score
                 self.best_chromosome_all_time = self.chromosome[:]
                 
-            history_iterations.append(iteration)
+            history_iterations.append(iteration + 1)
             history_avg_scores.append(avg_score)
             history_best_scores.append(best_score)
             

@@ -84,7 +84,7 @@ def visualize_best_game(history=None, title="Best Game Replay"):
     current_state = 0
     running = True
     paused = True
-    delay = 500
+    delay = 50
     last_update = pygame.time.get_ticks()
     scores = history['scores']
     pieces_per_move = history['available_pieces_per_move']
