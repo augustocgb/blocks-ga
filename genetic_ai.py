@@ -1,13 +1,18 @@
 import random
 import game_logic as game
 
+try:
+    import msvcrt
+except ImportError:
+    msvcrt = None
+
 class Individual(object):
-    def __init__(self, chromosome_length = 5):
+    def __init__(self, chromosome_length = 6):
         self.chromosome = [random.uniform(-1.0, 1.0) for _ in range(chromosome_length)]
         self.fitness = 0.0
         self.best_score = 0.0
 
-    def evaluate_move_heuristic(self, grid_before_move, piece_data, r_target, c_target):
+    def evaluate_move_heuristic(self, grid_before_move, piece_data, r_target, c_target, current_streak):
         """Evaluates a potential move using the individual's chromosome and heuristic functions."""
         temp_grid_after_move = [row[:] for row in grid_before_move]
         
@@ -23,17 +28,27 @@ class Individual(object):
         contacts_val = game.count_contact_points(grid_before_move, piece_data["coords"], r_target, c_target)
         
         score = 0
-        if len(self.chromosome) == 5:
+        if len(self.chromosome) >= 5:
             score += self.chromosome[0] * holes
             score += self.chromosome[1] * agg_height
             score += self.chromosome[2] * bump
             score += self.chromosome[3] * lines_cleared_val
             score += self.chromosome[4] * contacts_val
-        else:
+        
+        if len(self.chromosome) >= 6:
+            predicted_streak = 0
+            if lines_cleared_val > 0:
+                predicted_streak = current_streak + lines_cleared_val
+            else:
+                predicted_streak = 0 # Streak breaks if no lines cleared
+            
+            score += self.chromosome[5] * predicted_streak
+             
+        if len(self.chromosome) < 5:
             score = -holes - agg_height - bump + lines_cleared_val * 10 + contacts_val
         return score
 
-    def choose_move(self, current_grid_data, current_available_pieces_info_sim):
+    def choose_move(self, current_grid_data, current_available_pieces_info_sim, current_streak=0):
         all_possible_moves = game.get_all_valid_moves(current_grid_data, current_available_pieces_info_sim)
         if not all_possible_moves:
             return None
@@ -46,7 +61,8 @@ class Individual(object):
                 current_grid_data, 
                 move['piece_data'], 
                 move['target_row'], 
-                move['target_col']
+                move['target_col'],
+                current_streak
             )
             if heuristic_score > best_heuristic_score:
                 best_heuristic_score = heuristic_score
@@ -139,33 +155,23 @@ class GeneticAlgorithm:
         return new_population
 
     def run_evolution(self, game_function, n_generations):
-        print("\nStarting evolution...")
-        
-        # Initialize and evaluate first population
+        print("\nStarting evolution... (Press 's' to stop current phase)")
         self.initialize_population()
         
-        best_scores = []
-        avg_scores = []
-        best_finess = []
-        avg_fitness = []
-        generations = []
+        best_scores, avg_scores, best_finess, avg_fitness, generations = [], [], [], [], []
         
         for gen in range(n_generations):
             print(f"\n{'='*60}")
             print(f"Generation {gen + 1}/{n_generations}".center(60))
             
-            # Evaluate population
             self.eval_pop_fitness(game_function)
-            #self.population.sort(key=lambda x: x.fitness, reverse=True)
             
-            # Track statistics
             generations.append(gen)
             best_scores.append(self.best_individual_current.best_score)
             avg_scores.append(sum(ind.best_score for ind in self.population) / len(self.population))
             best_finess.append(self.best_individual_current.fitness)
             avg_fitness.append(sum(ind.fitness for ind in self.population) / len(self.population))
             
-            # Print generation status
             print(f"{'='*60}")
             print(f"Generation Best Fitness:          {self.best_individual_current.fitness:>10}")
             print(f"Generation Best Score:            {self.best_individual_current.best_score:>10}")
@@ -174,6 +180,11 @@ class GeneticAlgorithm:
             print(f"All-Time Best Score:              {self.best_individual_all_time.best_score:>10}")
             print(f"Best Chromosome:                  [{', '.join([f'{x:>7.3f}' for x in self.best_individual_all_time.chromosome])}]")
             print(f"{'='*60}")
+
+            if msvcrt and msvcrt.kbhit():
+                if msvcrt.getch().decode('utf-8').lower() == 's':
+                    print("\n[STOP] 's' pressed. Finishing GA phase...")
+                    break
 
             self.population = self.new_generation()
 

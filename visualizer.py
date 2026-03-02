@@ -56,18 +56,27 @@ def draw_available_pieces(surface, pieces_per_move, move_idx):
                       piece_area_y + PIECES_AREA_HEIGHT//4,
                       small_cell_size)
 
-def draw_score(surface, score):
-    font = pygame.font.SysFont('Arial', 24)
+def draw_score(surface, score, font):
     score_text = font.render(f'Score: {score}', True, TEXT_COLOR)
     text_rect = score_text.get_rect(center=(SCREEN_WIDTH // 2, BOARD_HEIGHT + SCORE_AREA_HEIGHT // 2))
     surface.blit(score_text, text_rect)
 
-def visualize_best_game():
+def visualize_best_game(history=None, title="Best Game Replay"):
+    if not pygame.get_init():
+        pygame.init()
+    if not pygame.font.get_init():
+        pygame.font.init()
+        
     screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-    pygame.display.set_caption("Best Game Replay")
+    pygame.display.set_caption(title)
     clock = pygame.time.Clock()
+    
+    # Create font once
+    game_font = pygame.font.SysFont('Arial', 24)
 
-    history = get_best_game_history()
+    if history is None:
+        history = get_best_game_history()
+        
     if not history:
         print("No game history available!")
         return
@@ -116,7 +125,7 @@ def visualize_best_game():
 
         screen.fill(BACKGROUND_COLOR)
         draw_grid(screen, history['grid_states'][current_state])
-        draw_score(screen, scores[current_state])
+        draw_score(screen, scores[current_state], game_font)
         draw_available_pieces(screen, pieces_per_move, current_state)
         pygame.display.flip()
         clock.tick(60)

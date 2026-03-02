@@ -13,13 +13,17 @@ import copy
 best_score = 0
 best_game_history = None
 
+def reset_best_tracking():
+    global best_score, best_game_history
+    best_score = 0
+    best_game_history = None
+
 def simulate_game(chromosome):
-    """Simulates a full game using the given chromosome for decisions."""
+    """Simulates a full game using the given chromosome."""
     global best_score, best_game_history
     
     grid = [[EMPTY_CELL_COLOR for _ in range(GRID_SIZE)] for _ in range(GRID_SIZE)]
-    score = 0
-    streak = 0
+    score, streak = 0, 0
     
     game_history = {
         'moves': [],
@@ -35,14 +39,10 @@ def simulate_game(chromosome):
     game_over = False
     
     while not game_over:
-        # Generate exactly 3 new pieces for this round
         current_pieces = []
         for _ in range(3):
             piece = random.choice(SHAPES).copy()
-            current_pieces.append({
-                "piece_data": piece,
-                "placed": False
-            })
+            current_pieces.append({"piece_data": piece, "placed": False})
 
         game_history['moves'].append(None)
         game_history['grid_states'].append(copy.deepcopy(grid))
@@ -51,15 +51,12 @@ def simulate_game(chromosome):
 
         pieces_placed = 0
         while pieces_placed < 3 and not game_over:
-
-            # Get unplaced pieces
             unplaced = [p for p in current_pieces if not p["placed"]]
-            move = ai_player.choose_move(grid, unplaced)
+            move = ai_player.choose_move(grid, unplaced, streak)
             if move is None:
                 game_over = True
                 break
 
-            # Mark the used piece as placed
             piece_data = move["piece_data"]
             for piece in current_pieces:
                 if piece["piece_data"] == piece_data:
@@ -67,11 +64,9 @@ def simulate_game(chromosome):
                     current_pieces.remove(piece)
                     break
 
-            # Apply the move
             for r_offset, c_offset in piece_data["coords"]:
                 grid[move["target_row"] + r_offset][move["target_col"] + c_offset] = piece_data["color"]
 
-            # Update score for placing piece
             score += len(piece_data["coords"])
 
             game_history['moves'].append({
@@ -83,19 +78,15 @@ def simulate_game(chromosome):
             game_history['available_pieces_per_move'].append(copy.deepcopy(current_pieces))
             game_history['scores'].append(score)
 
-            # Check for line clears
-            rows_cleared = 0
-            cols_cleared = 0
+            rows_cleared, cols_cleared = 0, 0
             for r in range(GRID_SIZE):
                 if all(grid[r][c] != EMPTY_CELL_COLOR for c in range(GRID_SIZE)):
                     rows_cleared += 1
-                    for c in range(GRID_SIZE):
-                        grid[r][c] = EMPTY_CELL_COLOR
+                    for c in range(GRID_SIZE): grid[r][c] = EMPTY_CELL_COLOR
             for c in range(GRID_SIZE):
                 if all(grid[r][c] != EMPTY_CELL_COLOR for r in range(GRID_SIZE)):
                     cols_cleared += 1
-                    for r in range(GRID_SIZE):
-                        grid[r][c] = EMPTY_CELL_COLOR
+                    for r in range(GRID_SIZE): grid[r][c] = EMPTY_CELL_COLOR
 
             total_cleared = rows_cleared + cols_cleared
             if total_cleared > 0:
@@ -105,7 +96,6 @@ def simulate_game(chromosome):
                 streak = 0
 
             if total_cleared > 0:
-                # Record everything after the clear
                 game_history['moves'].append({
                     'piece_data': piece_data,
                     'target_row': move["target_row"],
@@ -122,12 +112,14 @@ def simulate_game(chromosome):
         best_score = score
         best_game_history = game_history
 
-    #print("score:", score)
     return score
 
-def evaluate_chromosome(chromosome, num_games=3):
+def evaluate_chromosome(chromosome, num_games=3, seed=None):
     total_score = 0
     best_score = 0
+
+    if seed is not None:
+        random.seed(seed)
 
     for game_num in range(num_games):
         score = simulate_game(chromosome)
@@ -136,6 +128,9 @@ def evaluate_chromosome(chromosome, num_games=3):
             best_score = score
 
         total_score += score
+
+    if seed is not None:
+        random.seed()
 
     return int(total_score / num_games), best_score
 
