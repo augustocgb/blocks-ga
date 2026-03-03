@@ -79,7 +79,8 @@ class GeneticAlgorithm:
         self.elitism_count = min(elitism_count, population_size - 1)
         self.population = []
         self.best_individual_current = Individual(chromosome_length)  # Best individual in the current generation
-        self.best_individual_all_time = Individual(chromosome_length)  # Best individual across all generations
+        self.best_individual_all_time = Individual(chromosome_length)  # Best individual across all generations (by score)
+        self.best_fitness_all_time = Individual(chromosome_length) # Best individual across all generations (by fitness)
 
     def _create_individual(self):
         return Individual(self.chromosome_length)
@@ -88,28 +89,32 @@ class GeneticAlgorithm:
         self.population = [self._create_individual() for _ in range(self.population_size)]
 
     def eval_pop_fitness(self, game_function):
+        # Reset current best for the generation
+        self.best_individual_current = self.population[0]
+        
         for i, individual in enumerate(self.population):
             individual.fitness, individual.best_score = game_function(individual.chromosome)
-            #print(f"Individual {i + 1} average fitness: {individual.fitness}")
-            #print(f"Individual {i + 1} best score: {individual.best_score}")
 
             if individual.best_score > self.best_individual_current.best_score:
                 self.best_individual_current = individual
 
-        # Update best individual in the current population
-        #self.population.sort(key=lambda x: x.fitness, reverse=True)
-        #self.best_individual_current = self.population[0]
-
-        # Update best individual across all generations
+        # Update best individual across all generations (by max score)
         if (self.best_individual_current.best_score > self.best_individual_all_time.best_score):
             self.best_individual_all_time.best_score = self.best_individual_current.best_score
             self.best_individual_all_time.fitness = self.best_individual_current.fitness
-            self.best_individual_all_time.chromosome = self.best_individual_current.chromosome
+            self.best_individual_all_time.chromosome = self.best_individual_current.chromosome[:]
+            
+        # Update best individual across all generations (by average fitness)
+        best_fit_current = max(self.population, key=lambda x: x.fitness)
+        if best_fit_current.fitness > self.best_fitness_all_time.fitness:
+            self.best_fitness_all_time.best_score = best_fit_current.best_score
+            self.best_fitness_all_time.fitness = best_fit_current.fitness
+            self.best_fitness_all_time.chromosome = best_fit_current.chromosome[:]
 
     def select_parents(self):
         return random.choices(
             population=self.population,
-            weights=[ind.fitness for ind in self.population],
+            weights=[max(0.1, ind.fitness) for ind in self.population],
             k=2
         )
     
@@ -136,7 +141,7 @@ class GeneticAlgorithm:
     def new_generation(self):
         # Keep elite individuals
         self.population.sort(key=lambda x: x.fitness, reverse=True)
-        new_population = self.population[:self.elitism_count]
+        new_population = [ind for ind in self.population[:self.elitism_count]]
         
         # Create rest of new population through selection/crossover/mutation
         while len(new_population) < self.population_size:
@@ -159,6 +164,7 @@ class GeneticAlgorithm:
         self.initialize_population()
         
         best_scores, avg_scores, best_finess, avg_fitness, generations = [], [], [], [], []
+        chromosome_history = []
         
         for gen in range(n_generations):
             print(f"\n{'='*60}")
@@ -168,17 +174,20 @@ class GeneticAlgorithm:
             
             generations.append(gen)
             best_scores.append(self.best_individual_current.best_score)
-            avg_scores.append(sum(ind.best_score for ind in self.population) / len(self.population))
-            best_finess.append(self.best_individual_current.fitness)
+            avg_scores.append(sum(ind.fitness for ind in self.population) / len(self.population))
+            best_finess.append(self.best_fitness_all_time.fitness)
             avg_fitness.append(sum(ind.fitness for ind in self.population) / len(self.population))
             
+            chromosome_history.append([ind.chromosome[:] for ind in self.population])
+            
             print(f"{'='*60}")
-            print(f"Generation Best Fitness:          {self.best_individual_current.fitness:>10}")
+            print(f"Generation Best Fitness:          {max(ind.fitness for ind in self.population):>10}")
             print(f"Generation Best Score:            {self.best_individual_current.best_score:>10}")
             print(f"Average Fitness:                  {avg_scores[-1]:>10.2f}")
-            print(f"All-Time Best Fitness:            {self.best_individual_all_time.fitness:>10}")
+            print(f"All-Time Best Fitness:            {self.best_fitness_all_time.fitness:>10}")
             print(f"All-Time Best Score:              {self.best_individual_all_time.best_score:>10}")
-            print(f"Best Chromosome:                  [{', '.join([f'{x:>7.3f}' for x in self.best_individual_all_time.chromosome])}]")
+            print(f"Best Score Chromosome:            [{', '.join([f'{x:>7.3f}' for x in self.best_individual_all_time.chromosome])}]")
+            print(f"Best Fitness Chromosome:          [{', '.join([f'{x:>7.3f}' for x in self.best_fitness_all_time.chromosome])}]")
             print(f"{'='*60}")
 
             if msvcrt and msvcrt.kbhit():
@@ -190,6 +199,6 @@ class GeneticAlgorithm:
 
         print("\nEvolution completed!")
         
-        return self.best_individual_all_time, (generations, best_scores, avg_scores, best_finess, avg_fitness)
+        return self.best_individual_all_time, self.best_fitness_all_time, (generations, best_scores, avg_scores, best_finess, avg_fitness, chromosome_history)
 
 

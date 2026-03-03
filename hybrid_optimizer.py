@@ -10,10 +10,11 @@ class HybridOptimizer:
                  ga_generations=15,
                  sgd_iterations=20,
                  games_per_eval_ga=5,
-                 games_per_eval_sgd=10,
-                 sgd_lr=0.1,
-                 sgd_perturbation=0.05,
-                 sgd_momentum=0.8):
+                 games_per_eval_sgd=50,
+                 games_per_perturbation_sgd=10,
+                 sgd_lr=0.01,
+                 sgd_perturbation=0.01,
+                 sgd_momentum=0.5):
         
         self.chromosome_length = chromosome_length
         self.ga_pop_size = ga_pop_size
@@ -21,6 +22,7 @@ class HybridOptimizer:
         self.sgd_iterations = sgd_iterations
         self.games_per_eval_ga = games_per_eval_ga
         self.games_per_eval_sgd = games_per_eval_sgd
+        self.games_per_perturbation_sgd = games_per_perturbation_sgd
         
         # SGD Hyperparameters for fine-tuning (usually lower LR/perturbation than from-scratch SGD)
         self.sgd_lr = sgd_lr
@@ -49,7 +51,7 @@ class HybridOptimizer:
             elitism_count=2
         )
 
-        best_ga_ind, (ga_gens, ga_best, ga_avg, _, _) = ga.run_evolution(evaluate_ga, self.ga_generations)
+        best_ga_ind, best_ga_fitness_ind, (ga_gens, ga_best, ga_avg, ga_best_fitness, _, ga_chrom_hist) = ga.run_evolution(evaluate_ga, self.ga_generations)
         
         print("\n" + "-"*60)
         print(f"Phase 1 Complete.")
@@ -61,6 +63,7 @@ class HybridOptimizer:
         print(f"  - Starting Weights: Best from GA")
         print(f"  - Iterations: {self.sgd_iterations}")
         print(f"  - Games/Eval: {self.games_per_eval_sgd}")
+        print(f"  - Games/Perturbation: {self.games_per_perturbation_sgd}")
         print(f"  - Learning Rate: {self.sgd_lr}")
         
         def evaluate_sgd(chrom, num_games=self.games_per_eval_sgd, seed=None):
@@ -74,7 +77,12 @@ class HybridOptimizer:
             initial_weights=best_ga_ind.chromosome
         )
         
-        best_hybrid_chrom, (sgd_iters, sgd_best, sgd_avg) = sgd.train(evaluate_sgd, self.sgd_iterations)
+        best_hybrid_chrom, (sgd_iters, sgd_best, sgd_avg, sgd_chrom_hist) = sgd.train(
+            evaluate_sgd, 
+            self.sgd_iterations,
+            num_games_per_eval=self.games_per_eval_sgd,
+            num_games_per_perturbation=self.games_per_perturbation_sgd
+        )
 
         print("\n" + "="*60)
         print("HYBRID OPTIMIZATION COMPLETE".center(60))
@@ -86,8 +94,10 @@ class HybridOptimizer:
         sgd_iters_shifted = [i + actual_ga_gens for i in sgd_iters]
         
         return {
-            'ga_stats': (ga_gens, ga_best, ga_avg),
-            'sgd_stats': (sgd_iters_shifted, sgd_best, sgd_avg),
+            'ga_stats': (ga_gens, ga_best, ga_avg, ga_best_fitness, ga_chrom_hist),
+            'sgd_stats': (sgd_iters_shifted, sgd_best, sgd_avg, sgd_chrom_hist),
             'best_score': sgd.best_score_all_time,
-            'best_weights': best_hybrid_chrom
+            'best_weights': best_hybrid_chrom,
+            'best_ga_ind': best_ga_ind,
+            'best_ga_fitness_ind': best_ga_fitness_ind
         }
