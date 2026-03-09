@@ -212,58 +212,86 @@ def draw_single_piece(surface, piece_render_data, top_left_x, top_left_y, cell_s
 
 def generate_and_setup_new_pieces():
     global available_pieces_info
-    infos = []
     
-    preview_cell_size = int(CELL_SIZE * PREVIEW_CELL_SIZE_RATIO)
-    
-    # Calculate total width required for 3 pieces to center them
-    total_width_of_previews = 0
-    preview_piece_widths_px = []
-    chosen_shapes_for_preview = []
-
-    for _ in range(3):
-        chosen_shape = random.choice(SHAPES).copy()
-        chosen_shapes_for_preview.append(chosen_shape)
-        _, w_cells = get_piece_bounding_box_dims(chosen_shape["coords"])
-        piece_width_px = w_cells * preview_cell_size
-        preview_piece_widths_px.append(piece_width_px)
-        total_width_of_previews += piece_width_px
-
-    num_pieces = 3
-    spacing = (SCREEN_WIDTH - total_width_of_previews) / (num_pieces + 1)
-    if spacing < 10: spacing = 10 # Minimum spacing
-
-    current_x = spacing
-    preview_area_base_y = BOARD_HEIGHT + SCORE_AREA_HEIGHT + PIECE_PREVIEW_AREA_TOP_MARGIN
-
-    for i in range(num_pieces):
-        piece_data = chosen_shapes_for_preview[i]
-        h_cells, w_cells = get_piece_bounding_box_dims(piece_data["coords"])
+    any_shape_valid = False
+    for shape in SHAPES:
+        for r in range(GRID_SIZE):
+            for c in range(GRID_SIZE):
+                if is_move_valid(shape["coords"], r, c):
+                    any_shape_valid = True
+                    break
+            if any_shape_valid: break
+        if any_shape_valid: break
         
-        piece_width_px = w_cells * preview_cell_size
-        piece_height_px = h_cells * preview_cell_size
+    while True:
+        infos = []
+        preview_cell_size = int(CELL_SIZE * PREVIEW_CELL_SIZE_RATIO)
         
-        # Center piece vertically in its preview slot (optional, simple top align is fine too)
-        y_pos = preview_area_base_y + ( (MAX_PREVIEW_PIECE_DIM_CELLS * preview_cell_size) - piece_height_px) / 2
+        # Calculate total width required for 3 pieces to center them
+        total_width_of_previews = 0
+        preview_piece_widths_px = []
+        chosen_shapes_for_preview = []
+
+        for _ in range(3):
+            chosen_shape = random.choice(SHAPES).copy()
+            chosen_shapes_for_preview.append(chosen_shape)
+            _, w_cells = get_piece_bounding_box_dims(chosen_shape["coords"])
+            piece_width_px = w_cells * preview_cell_size
+            preview_piece_widths_px.append(piece_width_px)
+            total_width_of_previews += piece_width_px
+
+        num_pieces = 3
+        spacing = (SCREEN_WIDTH - total_width_of_previews) / (num_pieces + 1)
+        if spacing < 10: spacing = 10 # Minimum spacing
+
+        current_x = spacing
+        preview_area_base_y = BOARD_HEIGHT + SCORE_AREA_HEIGHT + PIECE_PREVIEW_AREA_TOP_MARGIN
+
+        for i in range(num_pieces):
+            piece_data = chosen_shapes_for_preview[i]
+            h_cells, w_cells = get_piece_bounding_box_dims(piece_data["coords"])
+            
+            piece_width_px = w_cells * preview_cell_size
+            piece_height_px = h_cells * preview_cell_size
+            
+            # Center piece vertically in its preview slot (optional, simple top align is fine too)
+            y_pos = preview_area_base_y + ( (MAX_PREVIEW_PIECE_DIM_CELLS * preview_cell_size) - piece_height_px) / 2
 
 
-        draw_rect = pygame.Rect(current_x, y_pos, piece_width_px, piece_height_px)
-        # Make clickable area slightly larger than visual piece for easier interaction
-        click_expansion = 5 
-        clickable_rect = pygame.Rect(current_x - click_expansion, y_pos - click_expansion, 
-                                      piece_width_px + 2 * click_expansion, piece_height_px + 2 * click_expansion)
+            draw_rect = pygame.Rect(current_x, y_pos, piece_width_px, piece_height_px)
+            # Make clickable area slightly larger than visual piece for easier interaction
+            click_expansion = 5 
+            clickable_rect = pygame.Rect(current_x - click_expansion, y_pos - click_expansion, 
+                                          piece_width_px + 2 * click_expansion, piece_height_px + 2 * click_expansion)
 
-        infos.append({
-            "piece_data": piece_data,
-            "draw_rect": draw_rect, # For reference, actual drawing uses original_pos
-            "click_rect": clickable_rect,
-            "preview_cell_size": preview_cell_size,
-            "original_pos_x": current_x,
-            "original_pos_y": y_pos,
-            "placed": False
-        })
-        current_x += piece_width_px + spacing
-    
+            infos.append({
+                "piece_data": piece_data,
+                "draw_rect": draw_rect, # For reference, actual drawing uses original_pos
+                "click_rect": clickable_rect,
+                "preview_cell_size": preview_cell_size,
+                "original_pos_x": current_x,
+                "original_pos_y": y_pos,
+                "placed": False
+            })
+            current_x += piece_width_px + spacing
+        
+        if not any_shape_valid:
+            break
+            
+        valid_set = False
+        for piece_info in infos:
+            piece_coords = piece_info["piece_data"]["coords"]
+            for r in range(GRID_SIZE):
+                for c in range(GRID_SIZE):
+                    if is_move_valid(piece_coords, r, c):
+                        valid_set = True
+                        break
+                if valid_set: break
+            if valid_set: break
+            
+        if valid_set:
+            break
+            
     available_pieces_info = infos
 
 def draw_game_board(surface):

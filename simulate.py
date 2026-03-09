@@ -39,10 +39,25 @@ def simulate_game(chromosome, render_callback=None):
     game_over = False
     
     while not game_over:
+        any_shape_valid = False
+        for shape in SHAPES:
+            if get_all_valid_moves(grid, [{"piece_data": shape, "placed": False}]):
+                any_shape_valid = True
+                break
+
         current_pieces = []
-        for _ in range(3):
-            piece = random.choice(SHAPES).copy()
-            current_pieces.append({"piece_data": piece, "placed": False})
+        if any_shape_valid:
+            while True:
+                current_pieces = []
+                for _ in range(3):
+                    piece = random.choice(SHAPES).copy()
+                    current_pieces.append({"piece_data": piece, "placed": False})
+                if get_all_valid_moves(grid, current_pieces):
+                    break
+        else:
+            for _ in range(3):
+                piece = random.choice(SHAPES).copy()
+                current_pieces.append({"piece_data": piece, "placed": False})
 
         game_history['moves'].append(None)
         game_history['grid_states'].append(copy.deepcopy(grid))
@@ -55,6 +70,8 @@ def simulate_game(chromosome, render_callback=None):
             move = ai_player.choose_move(grid, unplaced, streak)
             if move is None:
                 game_over = True
+                if render_callback:
+                    render_callback(grid, score, current_pieces)
                 break
 
             piece_data = move["piece_data"]

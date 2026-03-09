@@ -6,85 +6,12 @@ from gradient_ai import GradientDescentAI
 from hybrid_optimizer import HybridOptimizer
 from simulate import evaluate_chromosome, get_best_game_history, reset_best_tracking
 from visualizer import visualize_best_game
-import matplotlib.pyplot as plt
-import numpy as np
-
-def _plotter_worker(pipe, n_weights, title):
-    import matplotlib.pyplot as plt
-    plt.ion()
-    fig, axes = plt.subplots(n_weights, 1, figsize=(10, 2 * n_weights), sharex=True)
-    if n_weights == 1: axes = [axes]
-    
-    fig.suptitle(f'Chromosome Distribution Over Time: {title}')
-    axes[-1].set_xlabel('Generation / Iteration')
-    
-    for w in range(n_weights):
-        axes[w].set_ylabel(f'Weight {w}')
-        axes[w].grid(True, alpha=0.3)
-        
-    plt.tight_layout()
-    plt.show(block=False)
-    
-    running = True
-    while running:
-        if pipe.poll(0.05):
-            try:
-                msg = pipe.recv()
-                if msg == 'QUIT':
-                    running = False
-                    break
-                
-                chromosome_history, generations = msg
-                
-                normalized_history = []
-                for gen_pop in chromosome_history:
-                    if gen_pop and isinstance(gen_pop[0], (float, int)):
-                        normalized_history.append([gen_pop])
-                    else:
-                        normalized_history.append(gen_pop)
-                
-                for w in range(n_weights):
-                    axes[w].clear()
-                    axes[w].set_ylabel(f'Weight {w}')
-                    axes[w].grid(True, alpha=0.3)
-                    
-                    data = []
-                    for gen_pop in normalized_history:
-                        weight_vals = [chrom[w] for chrom in gen_pop]
-                        data.append(weight_vals)
-                    
-                    axes[w].boxplot(data, positions=generations, widths=0.6, manage_ticks=False)
-                    
-                axes[-1].set_xlabel('Generation / Iteration')
-                if len(generations) > 1:
-                    axes[-1].set_xlim(min(generations) - 1, max(generations) + 1)
-            except EOFError:
-                running = False
-                break
-                
-        try:
-            plt.pause(0.05)
-        except Exception:
-            running = False
-            break
-
-class RealtimePlotter:
-    def __init__(self, n_weights, title):
-        self.parent_pipe, child_pipe = mp.Pipe()
-        self.process = mp.Process(target=_plotter_worker, args=(child_pipe, n_weights, title))
-        self.process.daemon = True
-        self.process.start()
-
-    def update_plot(self, chromosome_history, generations):
-        self.parent_pipe.send((chromosome_history, generations))
-        
-    def close(self):
-        self.parent_pipe.send('QUIT')
-        self.process.join(timeout=1)
+from plotter import RealtimePlotter, plot_chromosome_distribution
+import plotly.graph_objects as go
 
 # --- Configuration ---
 GA_POPULATION_SIZE = 100
-GA_N_GENERATIONS = 10
+GA_N_GENERATIONS = 3
 GAMES_PER_EVAL_GA = 10
 
 CHROMOSOME_LENGTH = 6
@@ -101,35 +28,6 @@ GAMES_PER_EVAL_SGD = 50
 SGD_LEARNING_RATE = 0.01
 SGD_PERTURBATION = 0.01
 SGD_MOMENTUM = 0.5
-
-def plot_chromosome_distribution(chromosome_history, generations, title):
-    if not chromosome_history or not chromosome_history[0]: return
-
-    normalized_history = []
-    for gen_pop in chromosome_history:
-        if gen_pop and isinstance(gen_pop[0], (float, int)):
-            normalized_history.append([gen_pop])
-        else:
-            normalized_history.append(gen_pop)
-    chromosome_history = normalized_history
-        
-    n_weights = len(chromosome_history[0][0])
-    fig, axes = plt.subplots(n_weights, 1, figsize=(10, 2 * n_weights), sharex=True)
-    if n_weights == 1: axes = [axes]
-    
-    for w in range(n_weights):
-        data = []
-        for gen_pop in chromosome_history:
-            weight_vals = [chrom[w] for chrom in gen_pop]
-            data.append(weight_vals)
-        
-        axes[w].boxplot(data, positions=generations, widths=0.6, manage_ticks=False)
-        axes[w].set_ylabel(f'Weight {w}')
-        axes[w].grid(True, alpha=0.3)
-    
-    axes[-1].set_xlabel('Generation / Iteration')
-    fig.suptitle(f'Chromosome Distribution Over Time: {title}')
-    plt.tight_layout()
 
 VISUALIZE_GRID_ROWS = 5
 VISUALIZE_GRID_COLS = 5
@@ -169,6 +67,10 @@ def run_comparison():
         ga_games_visualized = 0
         live_ga_chrom_hist = []
         live_ga_gens = []
+        live_ga_best_scores = []
+        live_ga_avg_scores = []
+        live_ga_best_chroms = []
+        live_ga_best_avg_chroms = []
 
         def on_ga_gen_start(gen):
             nonlocal ga_games_visualized
@@ -176,9 +78,26 @@ def run_comparison():
             
         def on_ga_gen_end(gen, population):
             if realtime_plotter:
+                best_score = max(ind.best_score for ind in population)
+                avg_score = sum(ind.fitness for ind in population) / len(population)
+                best_chrom = max(population, key=lambda ind: ind.best_score).chromosome
+                best_avg_chrom = max(population, key=lambda ind: ind.fitness).chromosome
+                
                 live_ga_chrom_hist.append([ind.chromosome[:] for ind in population])
                 live_ga_gens.append(gen)
-                realtime_plotter.update_plot(live_ga_chrom_hist, live_ga_gens)
+                live_ga_best_scores.append(best_score)
+                live_ga_avg_scores.append(avg_score)
+                live_ga_best_chroms.append(best_chrom[:])
+                live_ga_best_avg_chroms.append(best_avg_chrom[:])
+                
+                realtime_plotter.update_plot({
+                    'chromosome_history': live_ga_chrom_hist,
+                    'generations': live_ga_gens,
+                    'best_scores': live_ga_best_scores,
+                    'avg_scores': live_ga_avg_scores,
+                    'best_chromosomes': live_ga_best_chroms,
+                    'best_avg_chromosomes': live_ga_best_avg_chroms
+                })
         
         def evaluate_ga(chrom, num_games=GAMES_PER_EVAL_GA, seed=None):
             nonlocal ga_games_visualized
@@ -221,16 +140,28 @@ def run_comparison():
         live_sgd_chrom_hist = []
         live_sgd_gens = []
         
+        live_sgd_best_scores = []
+        live_sgd_avg_scores = []
+
         sgd_visualizer = None
         if args.visualize:
             from visualizer import RealtimeGridVisualizer
             sgd_visualizer = RealtimeGridVisualizer(1, 1, delay_ms=10)
 
-        def on_sgd_iter_end(iteration, chrom):
+        def on_sgd_iter_end(iteration, chrom, avg_score, best_score):
             if realtime_plotter:
-                live_sgd_chrom_hist.append(chrom[:])
+                live_sgd_chrom_hist.append([chrom[:]])
                 live_sgd_gens.append(iteration)
-                realtime_plotter.update_plot(live_sgd_chrom_hist, live_sgd_gens)
+                live_sgd_best_scores.append(best_score)
+                live_sgd_avg_scores.append(avg_score)
+                realtime_plotter.update_plot({
+                    'chromosome_history': live_sgd_chrom_hist,
+                    'generations': live_sgd_gens,
+                    'best_scores': live_sgd_best_scores,
+                    'avg_scores': live_sgd_avg_scores,
+                    'best_chromosomes': [chrom[:]] * len(live_sgd_gens),
+                    'best_avg_chromosomes': [chrom[:]] * len(live_sgd_gens)
+                })
         
         def evaluate_sgd(chrom, num_games=GAMES_PER_EVAL_SGD, seed=None, is_eval=False):
             callbacks = []
@@ -317,44 +248,43 @@ def run_comparison():
         final_hybrid_fit_avg, final_hybrid_fit_best = evaluate_chromosome(hybrid_data['best_avg_weights'], num_games=final_chromosome_test_count)
 
     if run_ga or run_sgd or run_hybrid:
-        plt.figure(figsize=(12, 6))
+        fig = go.Figure()
         
         if run_ga and ga_results:
             ga_gens, ga_best_scores, ga_avg_scores, ga_best_fitness, _, ga_chrom_hist = ga_results
-            plt.plot(ga_gens, ga_avg_scores, label='GA Average Fitness', color='blue', linestyle='-', alpha=0.5)
-            plt.plot(ga_gens, ga_best_scores, label='GA All-Time Best Score', color='blue', linestyle='--', linewidth=2)
-            plt.plot(ga_gens, ga_best_fitness, label='GA All-Time Best Fitness', color='purple', linestyle='-.', linewidth=2)
+            fig.add_trace(go.Scatter(x=ga_gens, y=ga_avg_scores, mode='lines', name='GA Average Fitness', line=dict(color='rgba(0,0,255,0.5)', dash='solid')))
+            fig.add_trace(go.Scatter(x=ga_gens, y=ga_best_scores, mode='lines', name='GA All-Time Best Score', line=dict(color='blue', dash='dash', width=2)))
+            fig.add_trace(go.Scatter(x=ga_gens, y=ga_best_fitness, mode='lines', name='GA All-Time Best Fitness', line=dict(color='purple', dash='dashdot', width=2)))
             plot_chromosome_distribution(ga_chrom_hist, ga_gens, "GA")
         
         if run_sgd and sgd_results:
             sgd_iters, sgd_best_scores, sgd_avg_scores, sgd_chrom_hist = sgd_results
-            plt.plot(sgd_iters, sgd_avg_scores, label='SGD Average', color='red', linestyle='-', alpha=0.5)
-            plt.plot(sgd_iters, sgd_best_scores, label='SGD Best', color='red', linestyle='--', linewidth=2)
+            fig.add_trace(go.Scatter(x=sgd_iters, y=sgd_avg_scores, mode='lines', name='SGD Average', line=dict(color='rgba(255,0,0,0.5)', dash='solid')))
+            fig.add_trace(go.Scatter(x=sgd_iters, y=sgd_best_scores, mode='lines', name='SGD Best', line=dict(color='red', dash='dash', width=2)))
             plot_chromosome_distribution(sgd_chrom_hist, sgd_iters, "SGD")
             
         if run_hybrid and hybrid_results:
             h_ga_gens, h_ga_best, h_ga_avg, h_ga_best_fitness, h_ga_chrom_hist = hybrid_results['ga_stats']
             h_sgd_iters, h_sgd_best, h_sgd_avg, h_sgd_chrom_hist = hybrid_results['sgd_stats']
             
-            plt.plot(h_ga_gens, h_ga_avg, label='Hybrid (GA Phase) Avg', color='green', linestyle='-', alpha=0.5)
-            plt.plot(h_ga_gens, h_ga_best, label='Hybrid (GA Phase) Best Score', color='green', linestyle='--', linewidth=2)
-            plt.plot(h_ga_gens, h_ga_best_fitness, label='Hybrid (GA Phase) Best Fitness', color='darkgreen', linestyle='-.', linewidth=2)
-            plt.plot(h_sgd_iters, h_sgd_avg, label='Hybrid (SGD Phase) Avg', color='lime', linestyle='-', alpha=0.5)
-            plt.plot(h_sgd_iters, h_sgd_best, label='Hybrid (SGD Phase) Best Score', color='lime', linestyle='--', linewidth=2)
+            fig.add_trace(go.Scatter(x=h_ga_gens, y=h_ga_avg, mode='lines', name='Hybrid (GA Phase) Avg', line=dict(color='rgba(0,128,0,0.5)', dash='solid')))
+            fig.add_trace(go.Scatter(x=h_ga_gens, y=h_ga_best, mode='lines', name='Hybrid (GA Phase) Best Score', line=dict(color='green', dash='dash', width=2)))
+            fig.add_trace(go.Scatter(x=h_ga_gens, y=h_ga_best_fitness, mode='lines', name='Hybrid (GA Phase) Best Fitness', line=dict(color='darkgreen', dash='dashdot', width=2)))
+            fig.add_trace(go.Scatter(x=h_sgd_iters, y=h_sgd_avg, mode='lines', name='Hybrid (SGD Phase) Avg', line=dict(color='rgba(0,255,0,0.5)', dash='solid')))
+            fig.add_trace(go.Scatter(x=h_sgd_iters, y=h_sgd_best, mode='lines', name='Hybrid (SGD Phase) Best Score', line=dict(color='lime', dash='dash', width=2)))
             
             # For hybrid, plot the combined history
             combined_gens = h_ga_gens + h_sgd_iters
             combined_chrom_hist = h_ga_chrom_hist + h_sgd_chrom_hist
             plot_chromosome_distribution(combined_chrom_hist, combined_gens, "Hybrid (GA + SGD)")
 
-        plt.figure(1) # Bring focus back to the performance plot
-        plt.xlabel('Iteration / Generation')
-        plt.ylabel('Score')
-        plt.title('Performance Comparison')
-        plt.legend()
-        plt.grid(True, alpha=0.3)
-        plt.tight_layout()
-        plt.show()
+        fig.update_layout(
+            title='Performance Comparison',
+            xaxis_title='Iteration / Generation',
+            yaxis_title='Score',
+            template='plotly_white'
+        )
+        fig.show()
 
     print("\n--- Final Results ---")
     if run_ga and ga_best_ind:

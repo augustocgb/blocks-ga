@@ -81,7 +81,7 @@ class GradientDescentAI:
         chromosome_history.append(self.chromosome[:])
         
         if on_iter_end:
-            on_iter_end(0, self.chromosome)
+            on_iter_end(0, self.chromosome, current_avg, current_best)
         
         for iteration in range(n_iterations):
             print(f"\n{'='*60}")
@@ -119,7 +119,7 @@ class GradientDescentAI:
             chromosome_history.append(self.chromosome[:])
             
             if on_iter_end:
-                on_iter_end(iteration + 1, self.chromosome)
+                on_iter_end(iteration + 1, self.chromosome, avg_score, best_score)
             
             print(f"{'='*60}")
             print(f"Avg Score (New):                  {avg_score:>10.2f}")

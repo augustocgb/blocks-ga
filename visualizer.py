@@ -71,6 +71,7 @@ class RealtimeGridVisualizer:
         self.cols = cols
         self.delay_ms = delay_ms
         self.is_stopped = False
+        self.is_paused = False
         
         # Scale down cells if there are multiple grids to fit on screen
         self.scale = min(1.0, 1000 / (cols * SCREEN_WIDTH), 800 / (rows * SCREEN_HEIGHT))
@@ -88,12 +89,17 @@ class RealtimeGridVisualizer:
         self.screen_height = self.rows * self.grid_h
         
         self.screen = pygame.display.set_mode((self.screen_width, self.screen_height))
-        pygame.display.set_caption(f"Realtime Evaluation Visualizer | Delay: {self.delay_ms}ms | Up/Down: Speed | S: Stop")
+        self._update_caption()
         self.font = pygame.font.SysFont('Arial', max(12, int(24 * self.scale)))
         
         self.screen.fill(BACKGROUND_COLOR)
         pygame.display.flip()
         self.last_update = pygame.time.get_ticks()
+
+    def _update_caption(self):
+        if not pygame.get_init(): return
+        status = "PAUSED | " if self.is_paused else ""
+        pygame.display.set_caption(f"{status}Realtime Evaluation Visualizer | Delay: {self.delay_ms}ms | Up/Down: Speed | S: Stop | Space: Pause")
 
     def handle_events(self):
         for event in pygame.event.get():
@@ -104,12 +110,13 @@ class RealtimeGridVisualizer:
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_UP:
                     self.delay_ms = max(0, self.delay_ms - 5)
-                    if pygame.get_init():
-                        pygame.display.set_caption(f"Realtime Evaluation Visualizer | Delay: {self.delay_ms}ms | Up/Down: Speed | S: Stop")
+                    self._update_caption()
                 elif event.key == pygame.K_DOWN:
                     self.delay_ms += 5
-                    if pygame.get_init():
-                        pygame.display.set_caption(f"Realtime Evaluation Visualizer | Delay: {self.delay_ms}ms | Up/Down: Speed | S: Stop")
+                    self._update_caption()
+                elif event.key == pygame.K_SPACE:
+                    self.is_paused = not self.is_paused
+                    self._update_caption()
                 elif event.key == pygame.K_s:
                     pygame.quit()
                     self.is_stopped = True
@@ -118,6 +125,13 @@ class RealtimeGridVisualizer:
 
     def update_cell(self, row, col, grid, score, available_pieces):
         if not pygame.get_init() or self.is_stopped: return
+        
+        self.handle_events()
+        while self.is_paused and not self.is_stopped:
+            pygame.time.delay(50)
+            self.handle_events()
+            
+        if self.is_stopped: return
         
         offset_x = col * self.grid_w
         offset_y = row * self.grid_h
@@ -132,7 +146,7 @@ class RealtimeGridVisualizer:
         draw_score(self.screen, score, self.font, offset_x + self.grid_w // 2, offset_y + self.board_h + self.score_h // 2)
         
         # Draw pieces
-        if available_pieces:
+        if available_pieces is not None:
             draw_available_pieces(self.screen, [available_pieces], 0, offset_x, offset_y + self.board_h + self.score_h, self.grid_w, self.pieces_h)
             
         pygame.display.update(pygame.Rect(offset_x, offset_y, self.grid_w, self.grid_h))
@@ -141,7 +155,6 @@ class RealtimeGridVisualizer:
         if current_time - self.last_update < self.delay_ms:
             pygame.time.delay(self.delay_ms - (current_time - self.last_update))
         self.last_update = pygame.time.get_ticks()
-        self.handle_events()
 
 def visualize_best_game(history=None, title="Best Game Replay"):
     if not pygame.get_init():

@@ -47,17 +47,38 @@ class HybridOptimizer:
         ga_games_visualized = 0
         live_chrom_hist = []
         live_gens = []
+        live_best_scores = []
+        live_avg_scores = []
+        live_best_chroms = []
+        live_best_avg_chroms = []
 
         def on_ga_gen_start(gen):
             nonlocal ga_games_visualized
             ga_games_visualized = 0
-            
+
         def on_ga_gen_end(gen, population):
             if self.realtime_plotter:
+                best_score = max(ind.best_score for ind in population)
+                avg_score = sum(ind.fitness for ind in population) / len(population)
+                best_chrom = max(population, key=lambda ind: ind.best_score).chromosome
+                best_avg_chrom = max(population, key=lambda ind: ind.fitness).chromosome
+
                 live_chrom_hist.append([ind.chromosome[:] for ind in population])
                 live_gens.append(gen)
-                self.realtime_plotter.update_plot(live_chrom_hist, live_gens)
-            
+                live_best_scores.append(best_score)
+                live_avg_scores.append(avg_score)
+                live_best_chroms.append(best_chrom[:])
+                live_best_avg_chroms.append(best_avg_chrom[:])
+
+                self.realtime_plotter.update_plot({
+                    'chromosome_history': live_chrom_hist,
+                    'generations': live_gens,
+                    'best_scores': live_best_scores,
+                    'avg_scores': live_avg_scores,
+                    'best_chromosomes': live_best_chroms,
+                    'best_avg_chromosomes': live_best_avg_chroms
+                })
+
         def evaluate_ga(chrom, num_games=self.games_per_eval_ga, seed=None):
             nonlocal ga_games_visualized
             callbacks = []
@@ -105,19 +126,31 @@ class HybridOptimizer:
             from visualizer import RealtimeGridVisualizer
             sgd_visualizer = RealtimeGridVisualizer(1, 1, delay_ms=10)
         
-        def on_sgd_iter_end(iteration, chrom):
+        def on_sgd_iter_end(iteration, chrom, avg_score, best_score):
             if self.realtime_plotter:
                 actual_iter = len(ga_gens) + iteration
-                live_chrom_hist.append(chrom[:])
+                live_chrom_hist.append([chrom[:]])
                 live_gens.append(actual_iter)
-                self.realtime_plotter.update_plot(live_chrom_hist, live_gens)
+                live_best_scores.append(best_score)
+                live_avg_scores.append(avg_score)
+                live_best_chroms.append(chrom[:])
+                live_best_avg_chroms.append(chrom[:])
+                
+                self.realtime_plotter.update_plot({
+                    'chromosome_history': live_chrom_hist,
+                    'generations': live_gens,
+                    'best_scores': live_best_scores,
+                    'avg_scores': live_avg_scores,
+                    'best_chromosomes': live_best_chroms,
+                    'best_avg_chromosomes': live_best_avg_chroms
+                })
 
         def evaluate_sgd(chrom, num_games=self.games_per_eval_sgd, seed=None, is_eval=False):
             callbacks = []
-            if self.sgd_visualizer and not self.sgd_visualizer.is_stopped and is_eval:
+            if sgd_visualizer and not sgd_visualizer.is_stopped and is_eval:
                 for i in range(num_games):
                     def make_cb():
-                        return lambda g, s, p: self.sgd_visualizer.update_cell(0, 0, g, s, p)
+                        return lambda g, s, p: sgd_visualizer.update_cell(0, 0, g, s, p)
 
                     callbacks.append(make_cb())
             else:

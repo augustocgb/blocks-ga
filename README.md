@@ -12,12 +12,12 @@ This project implements a genetic algorithm to optimize gameplay for a block pla
 - Python 3.8+
 - Required libraries:
   - `pygame`
-  - `matplotlib`
+  - `plotly`
   - `numpy`
 
 Install the dependencies using:
 ```bash
-pip install pygame matplotlib numpy
+pip install pygame plotly numpy
 ```
 
 ## How to Run
