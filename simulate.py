@@ -18,7 +18,7 @@ def reset_best_tracking():
     best_score = 0
     best_game_history = None
 
-def simulate_game(chromosome):
+def simulate_game(chromosome, render_callback=None):
     """Simulates a full game using the given chromosome."""
     global best_score, best_game_history
     
@@ -69,6 +69,9 @@ def simulate_game(chromosome):
 
             score += len(piece_data["coords"])
 
+            if render_callback:
+                render_callback(grid, score, current_pieces)
+
             game_history['moves'].append({
                 'piece_data': piece_data,
                 'target_row': move["target_row"],
@@ -96,6 +99,9 @@ def simulate_game(chromosome):
                 streak = 0
 
             if total_cleared > 0:
+                if render_callback:
+                    render_callback(grid, score, current_pieces)
+
                 game_history['moves'].append({
                     'piece_data': piece_data,
                     'target_row': move["target_row"],
@@ -114,17 +120,19 @@ def simulate_game(chromosome):
 
     return score
 
-def evaluate_chromosome(chromosome, num_games=3, seed=None):
+def evaluate_chromosome(chromosome, num_games=3, seed=None, render_callbacks=None):
     total_score = 0
     best_score = 0
 
     for game_num in range(num_games):
         if seed is not None:
-            # Seed per game to ensure w_plus and w_minus face the exact same games
-            # independently of how long previous games lasted.
             random.seed(seed + game_num)
             
-        score = simulate_game(chromosome)
+        cb = None
+        if render_callbacks and game_num < len(render_callbacks):
+            cb = render_callbacks[game_num]
+
+        score = simulate_game(chromosome, render_callback=cb)
 
         if score > best_score:
             best_score = score
@@ -132,7 +140,7 @@ def evaluate_chromosome(chromosome, num_games=3, seed=None):
         total_score += score
 
     if seed is not None:
-        random.seed() # Reset seed after evaluation
+        random.seed()
 
     return int(total_score / num_games), best_score
 

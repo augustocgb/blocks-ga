@@ -159,7 +159,7 @@ class GeneticAlgorithm:
         self.population = new_population
         return new_population
 
-    def run_evolution(self, game_function, n_generations):
+    def run_evolution(self, game_function, n_generations, on_gen_start=None, on_gen_end=None):
         print("\nStarting evolution... (Press 's' to stop current phase)")
         self.initialize_population()
         
@@ -167,6 +167,9 @@ class GeneticAlgorithm:
         chromosome_history = []
         
         for gen in range(n_generations):
+            if on_gen_start:
+                on_gen_start(gen)
+                
             print(f"\n{'='*60}")
             print(f"Generation {gen + 1}/{n_generations}".center(60))
             
@@ -189,6 +192,9 @@ class GeneticAlgorithm:
             print(f"Best Score Chromosome:            [{', '.join([f'{x:>7.3f}' for x in self.best_individual_all_time.chromosome])}]")
             print(f"Best Fitness Chromosome:          [{', '.join([f'{x:>7.3f}' for x in self.best_fitness_all_time.chromosome])}]")
             print(f"{'='*60}")
+            
+            if on_gen_end:
+                on_gen_end(gen, self.population)
 
             if msvcrt and msvcrt.kbhit():
                 if msvcrt.getch().decode('utf-8').lower() == 's':
