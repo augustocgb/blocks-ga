@@ -7,6 +7,23 @@ import threading
 import json
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import os
+import numpy as np
+
+def idw_vectorized(xs, ys, zs, X, Y, power=2):
+    grid_shape = X.shape
+    X_flat = X.flatten()
+    Y_flat = Y.flatten()
+    
+    dx = xs[:, None] - X_flat[None, :]
+    dy = ys[:, None] - Y_flat[None, :]
+    dist = np.sqrt(dx**2 + dy**2)
+    
+    # Avoid division by zero
+    dist = np.maximum(dist, 1e-10)
+    weights = 1.0 / (dist**power)
+    
+    Z_flat = np.sum(weights * zs[:, None], axis=0) / np.sum(weights, axis=0)
+    return Z_flat.reshape(grid_shape)
 
 def _plotter_worker(pipe, n_weights, title):
     state = {
@@ -86,7 +103,6 @@ def _plotter_worker(pipe, n_weights, title):
                     running = False
                     break
                 
-                # Assume msg is a dictionary payload if it's a dict, otherwise fallback to tuple
                 if isinstance(msg, dict):
                     chromosome_history = msg['chromosome_history']
                     generations = msg['generations']
@@ -94,12 +110,10 @@ def _plotter_worker(pipe, n_weights, title):
                     avg_scores = msg.get('avg_scores', [])
                     best_chroms = msg.get('best_chromosomes', [])
                     best_avg_chroms = msg.get('best_avg_chromosomes', [])
+                    all_evaluations = msg.get('all_evaluations', [])
                 else:
                     chromosome_history, generations = msg
-                    best_scores = []
-                    avg_scores = []
-                    best_chroms = []
-                    best_avg_chroms = []
+                    best_scores, avg_scores, best_chroms, best_avg_chroms, all_evaluations = [], [], [], [], []
                 
                 normalized_history = []
                 for gen_pop in chromosome_history:
@@ -109,9 +123,24 @@ def _plotter_worker(pipe, n_weights, title):
                         normalized_history.append(gen_pop)
                 
                 has_scores = len(best_scores) > 0 and len(avg_scores) > 0
+                has_3d = len(all_evaluations) > 0 and n_weights >= 3
                 total_rows = n_weights + 1 if has_scores else n_weights
                 
-                fig = make_subplots(rows=total_rows, cols=1, shared_xaxes=True, vertical_spacing=0.02)
+                specs = []
+                for r in range(total_rows):
+                    row_specs = [{"type": "xy"}]
+                    if has_3d:
+                        if r == 0:
+                            row_specs.append({"type": "scene", "rowspan": total_rows})
+                        else:
+                            row_specs.append(None)
+                    specs.append(row_specs)
+                
+                fig = make_subplots(
+                    rows=total_rows, cols=2 if has_3d else 1, 
+                    specs=specs, shared_xaxes=True, vertical_spacing=0.02,
+                    column_widths=[0.6, 0.4] if has_3d else [1.0]
+                )
                 
                 row_offset = 0
                 if has_scores:
@@ -134,27 +163,65 @@ def _plotter_worker(pipe, n_weights, title):
                         
                         if i < len(best_chroms):
                             fig.add_trace(go.Scatter(
-                                x=[generations[i]], 
-                                y=[best_chroms[i][w]], 
-                                mode='markers', 
-                                marker=dict(symbol='star', size=12, color='gold', line=dict(width=1, color='black')), 
-                                showlegend=False, 
-                                name='Best Chrom'
+                                x=[generations[i]], y=[best_chroms[i][w]], 
+                                mode='markers', marker=dict(symbol='star', size=12, color='gold', line=dict(width=1, color='black')), 
+                                showlegend=False, name='Best Chrom'
                             ), row=target_row, col=1)
                         
                         if i < len(best_avg_chroms):
                             fig.add_trace(go.Scatter(
-                                x=[generations[i]], 
-                                y=[best_avg_chroms[i][w]], 
-                                mode='markers', 
-                                marker=dict(symbol='star', size=8, color='orange', line=dict(width=1, color='black')), 
-                                showlegend=False, 
-                                name='Best Avg Chrom'
+                                x=[generations[i]], y=[best_avg_chroms[i][w]], 
+                                mode='markers', marker=dict(symbol='star', size=8, color='orange', line=dict(width=1, color='black')), 
+                                showlegend=False, name='Best Avg Chrom'
                             ), row=target_row, col=1)
 
                     fig.update_yaxes(title_text=f'Weight {w}', row=target_row, col=1)
                 
                 fig.update_xaxes(title_text='Generation / Iteration', row=total_rows, col=1)
+                
+                if has_3d:
+                    idx1, idx2 = 1, 2
+                    xs = np.array([e['chromosome'][idx1] for e in all_evaluations])
+                    ys = np.array([e['chromosome'][idx2] for e in all_evaluations])
+                    zs = np.array([e['score'] for e in all_evaluations])
+                    
+                    if len(xs) > 1500:
+                        xs, ys, zs = xs[-1500:], ys[-1500:], zs[-1500:]
+                        
+                    margin_x = max((xs.max() - xs.min()) * 0.1, 0.1)
+                    margin_y = max((ys.max() - ys.min()) * 0.1, 0.1)
+                    
+                    grid_x = np.linspace(xs.min() - margin_x, xs.max() + margin_x, 30)
+                    grid_y = np.linspace(ys.min() - margin_y, ys.max() + margin_y, 30)
+                    X, Y = np.meshgrid(grid_x, grid_y)
+                    
+                    Z = idw_vectorized(xs, ys, zs, X, Y, power=3)
+                    
+                    fig.add_trace(go.Surface(
+                        x=grid_x, y=grid_y, z=Z, colorscale='Viridis', opacity=0.8, showscale=False, name='Landscape'
+                    ), row=1, col=2)
+                    
+                    fig.add_trace(go.Scatter3d(
+                        x=xs, y=ys, z=zs, mode='markers', marker=dict(size=2, color='black', opacity=0.5), name='Evaluations'
+                    ), row=1, col=2)
+                    
+                    if len(best_chroms) > 0:
+                        best_xs = [c[idx1] for c in best_chroms]
+                        best_ys = [c[idx2] for c in best_chroms]
+                        fig.add_trace(go.Scatter3d(
+                            x=best_xs, y=best_ys, z=best_scores, mode='lines+markers',
+                            line=dict(color='red', width=4), marker=dict(size=5, color='red'), name='Optimization Path'
+                        ), row=1, col=2)
+                        
+                    fig.update_layout(
+                        scene=dict(
+                            xaxis_title="Weight 1 (Agg Height)",
+                            yaxis_title="Weight 2 (Bumpiness)",
+                            zaxis_title="Fitness Score",
+                            camera=dict(eye=dict(x=1.5, y=1.5, z=1.2))
+                        )
+                    )
+
                 fig.update_layout(title_text=f'Training Progress: {title}', height=250 * max(1, total_rows), margin=dict(l=20, r=20, t=40, b=20), showlegend=has_scores)
                 
                 html = fig.to_html(include_plotlyjs='cdn', full_html=True)
@@ -209,4 +276,64 @@ def plot_chromosome_distribution(chromosome_history, generations, title):
     
     fig.update_xaxes(title_text='Generation / Iteration', row=n_weights, col=1)
     fig.update_layout(title_text=f'Chromosome Distribution Over Time: {title}', height=200 * max(1, n_weights))
+    fig.show()
+
+def plot_data_driven_valley(all_evaluations, best_chroms, best_scores):
+    if not all_evaluations or len(all_evaluations[0]['chromosome']) < 3:
+        print("No evaluation data to plot or chromosome too small.")
+        return
+        
+    idx1, idx2 = 1, 2
+    xs = np.array([e['chromosome'][idx1] for e in all_evaluations])
+    ys = np.array([e['chromosome'][idx2] for e in all_evaluations])
+    zs = np.array([e['score'] for e in all_evaluations])
+    
+    margin_x = max((xs.max() - xs.min()) * 0.1, 0.1)
+    margin_y = max((ys.max() - ys.min()) * 0.1, 0.1)
+    
+    grid_x = np.linspace(xs.min() - margin_x, xs.max() + margin_x, 50)
+    grid_y = np.linspace(ys.min() - margin_y, ys.max() + margin_y, 50)
+    X, Y = np.meshgrid(grid_x, grid_y)
+    
+    Z = idw_vectorized(xs, ys, zs, X, Y, power=3)
+    
+    fig = go.Figure()
+    fig.add_trace(go.Surface(
+        x=grid_x, y=grid_y, z=Z,
+        colorscale='Viridis', opacity=0.8,
+        showscale=False,
+        name='Fitness Landscape'
+    ))
+    
+    fig.add_trace(go.Scatter3d(
+        x=xs, y=ys, z=zs,
+        mode='markers',
+        marker=dict(size=3, color='black', opacity=0.5),
+        name='Evaluated Points'
+    ))
+    
+    if len(best_chroms) > 0:
+        best_xs = [c[idx1] for c in best_chroms]
+        best_ys = [c[idx2] for c in best_chroms]
+        best_zs = best_scores
+        
+        fig.add_trace(go.Scatter3d(
+            x=best_xs, y=best_ys, z=best_zs,
+            mode='lines+markers',
+            line=dict(color='red', width=5),
+            marker=dict(size=6, color='red'),
+            name='Optimization Path'
+        ))
+        
+    fig.update_layout(
+        title="Data-Driven Fitness Landscape (Weight 1 vs Weight 2)",
+        scene=dict(
+            xaxis_title="Weight 1 (Agg Height)",
+            yaxis_title="Weight 2 (Bumpiness)",
+            zaxis_title="Fitness Score",
+            camera=dict(eye=dict(x=1.5, y=1.5, z=1.2))
+        ),
+        margin=dict(l=0, r=0, b=0, t=50)
+    )
+    
     fig.show()

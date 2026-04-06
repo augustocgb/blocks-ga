@@ -6,13 +6,13 @@ from gradient_ai import GradientDescentAI
 from hybrid_optimizer import HybridOptimizer
 from simulate import evaluate_chromosome, get_best_game_history, reset_best_tracking
 from visualizer import visualize_best_game
-from plotter import RealtimePlotter, plot_chromosome_distribution
+from plotter import RealtimePlotter, plot_chromosome_distribution, plot_data_driven_valley
 import plotly.graph_objects as go
 
 # --- Configuration ---
 GA_POPULATION_SIZE = 100
-GA_N_GENERATIONS = 3
-GAMES_PER_EVAL_GA = 10
+GA_N_GENERATIONS = 5
+GAMES_PER_EVAL_GA = 5
 
 CHROMOSOME_LENGTH = 6
 MUTATION_RATE = 0.1
@@ -64,6 +64,7 @@ def run_comparison():
         print("\n[GA] Running Genetic Algorithm...")
         reset_best_tracking()
         
+        ga_evaluation_history = []
         ga_games_visualized = 0
         live_ga_chrom_hist = []
         live_ga_gens = []
@@ -96,7 +97,8 @@ def run_comparison():
                     'best_scores': live_ga_best_scores,
                     'avg_scores': live_ga_avg_scores,
                     'best_chromosomes': live_ga_best_chroms,
-                    'best_avg_chromosomes': live_ga_best_avg_chroms
+                    'best_avg_chromosomes': live_ga_best_avg_chroms,
+                    'all_evaluations': ga_evaluation_history
                 })
         
         def evaluate_ga(chrom, num_games=GAMES_PER_EVAL_GA, seed=None):
@@ -116,7 +118,9 @@ def run_comparison():
             else:
                 callbacks = None
                 
-            return evaluate_chromosome(chrom, num_games=num_games, seed=seed, render_callbacks=callbacks)
+            avg_score, best = evaluate_chromosome(chrom, num_games=num_games, seed=seed, render_callbacks=callbacks)
+            ga_evaluation_history.append({'chromosome': chrom[:], 'score': avg_score})
+            return avg_score, best
 
         ga = GeneticAlgorithm(
             population_size=GA_POPULATION_SIZE,
@@ -137,6 +141,7 @@ def run_comparison():
         print("\n[SGD] Running Stochastic Gradient Descent...")
         reset_best_tracking()
         
+        sgd_evaluation_history = []
         live_sgd_chrom_hist = []
         live_sgd_gens = []
         
@@ -160,7 +165,8 @@ def run_comparison():
                     'best_scores': live_sgd_best_scores,
                     'avg_scores': live_sgd_avg_scores,
                     'best_chromosomes': [chrom[:]] * len(live_sgd_gens),
-                    'best_avg_chromosomes': [chrom[:]] * len(live_sgd_gens)
+                    'best_avg_chromosomes': [chrom[:]] * len(live_sgd_gens),
+                    'all_evaluations': sgd_evaluation_history
                 })
         
         def evaluate_sgd(chrom, num_games=GAMES_PER_EVAL_SGD, seed=None, is_eval=False):
@@ -174,7 +180,9 @@ def run_comparison():
             else:
                 callbacks = None
                 
-            return evaluate_chromosome(chrom, num_games=num_games, seed=seed, render_callbacks=callbacks)
+            avg_score, best = evaluate_chromosome(chrom, num_games=num_games, seed=seed, render_callbacks=callbacks)
+            sgd_evaluation_history.append({'chromosome': chrom[:], 'score': avg_score})
+            return avg_score, best
 
         sgd = GradientDescentAI(
             chromosome_length=CHROMOSOME_LENGTH,
@@ -332,6 +340,9 @@ def run_comparison():
             visualize_best_game(hybrid_best_game_history, title=f"Hybrid Best Game (Score: {hybrid_best_score_val})")
         else:
             print("No Hybrid game history found.")
+        
+        print("\nGenerating Data-Driven GA vs SGD Fitness Landscape Visual...")
+        plot_data_driven_valley(hybrid_results['all_evaluations'], hybrid_results['all_best_chroms'], hybrid_results['all_best_scores'])
 
 if __name__ == "__main__":
     run_comparison()

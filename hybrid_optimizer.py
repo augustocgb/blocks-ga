@@ -32,6 +32,7 @@ class HybridOptimizer:
         
         self.visualizer = visualizer
         self.realtime_plotter = realtime_plotter
+        self.evaluation_history = []
 
     def run(self):
         print("="*60)
@@ -76,7 +77,8 @@ class HybridOptimizer:
                     'best_scores': live_best_scores,
                     'avg_scores': live_avg_scores,
                     'best_chromosomes': live_best_chroms,
-                    'best_avg_chromosomes': live_best_avg_chroms
+                    'best_avg_chromosomes': live_best_avg_chroms,
+                    'all_evaluations': self.evaluation_history
                 })
 
         def evaluate_ga(chrom, num_games=self.games_per_eval_ga, seed=None):
@@ -96,7 +98,9 @@ class HybridOptimizer:
             else:
                 callbacks = None
                 
-            return evaluate_chromosome(chrom, num_games=num_games, seed=seed, render_callbacks=callbacks)
+            avg_score, best_score = evaluate_chromosome(chrom, num_games=num_games, seed=seed, render_callbacks=callbacks)
+            self.evaluation_history.append({'chromosome': chrom[:], 'score': avg_score})
+            return avg_score, best_score
 
         ga = GeneticAlgorithm(
             population_size=self.ga_pop_size,
@@ -142,7 +146,8 @@ class HybridOptimizer:
                     'best_scores': live_best_scores,
                     'avg_scores': live_avg_scores,
                     'best_chromosomes': live_best_chroms,
-                    'best_avg_chromosomes': live_best_avg_chroms
+                    'best_avg_chromosomes': live_best_avg_chroms,
+                    'all_evaluations': self.evaluation_history
                 })
 
         def evaluate_sgd(chrom, num_games=self.games_per_eval_sgd, seed=None, is_eval=False):
@@ -155,7 +160,9 @@ class HybridOptimizer:
                     callbacks.append(make_cb())
             else:
                 callbacks = None
-            return evaluate_chromosome(chrom, num_games=num_games, seed=seed, render_callbacks=callbacks)
+            avg_score, best_score = evaluate_chromosome(chrom, num_games=num_games, seed=seed, render_callbacks=callbacks)
+            self.evaluation_history.append({'chromosome': chrom[:], 'score': avg_score})
+            return avg_score, best_score
 
         sgd = GradientDescentAI(
             chromosome_length=self.chromosome_length,
@@ -190,5 +197,8 @@ class HybridOptimizer:
             'best_weights': best_hybrid_chrom,
             'best_avg_weights': best_hybrid_avg_chrom,
             'best_ga_ind': best_ga_ind,
-            'best_ga_fitness_ind': best_ga_fitness_ind
+            'best_ga_fitness_ind': best_ga_fitness_ind,
+            'all_evaluations': self.evaluation_history,
+            'all_best_chroms': live_best_chroms,
+            'all_best_scores': live_best_scores
         }
