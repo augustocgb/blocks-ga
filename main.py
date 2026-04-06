@@ -35,28 +35,53 @@ VISUALIZE_GRID_ROWS = 5
 
 def _ga_worker(args):
     if len(args) == 5:
-        chrom, num_games, seed, viz_slots, queue = args
+        chrom, num_games, seed, slot_queue, msg_queue = args
     else:
         chrom, num_games, seed = args
-        viz_slots, queue = None, None
+        slot_queue, msg_queue = None, None
         
-    callbacks = []
-    if queue is not None and viz_slots is not None:
-        for i in range(num_games):
-            slot = viz_slots[i] if i < len(viz_slots) else None
-            if slot is not None:
-                r, c = slot
-                # Capture r and c in default arguments to avoid late binding
-                def make_cb(row=r, col=c):
-                    return lambda g, s, p: queue.put(('update', row, col, g, s, p))
-                callbacks.append(make_cb())
-            else:
-                callbacks.append(None)
-    else:
-        callbacks = None
+    avg_score = 0
+    best_score = -float('inf')
+    
+    import random
+    import queue
+    from simulate import simulate_game, EMPTY_CELL_COLOR, GRID_SIZE
+    
+    empty_grid = [[EMPTY_CELL_COLOR for _ in range(GRID_SIZE)] for _ in range(GRID_SIZE)]
+    
+    for game_num in range(num_games):
+        if seed is not None:
+            random.seed(seed + game_num)
+            
+        my_slot = None
+        if slot_queue is not None:
+            try:
+                my_slot = slot_queue.get_nowait()
+            except queue.Empty:
+                my_slot = None
+                
+        cb = None
+        if my_slot is not None:
+            r, c = my_slot
+            def make_cb(row=r, col=c):
+                return lambda g, s, p: msg_queue.put(('update', row, col, g, s, p))
+            cb = make_cb()
+            
+        score = simulate_game(chrom, render_callback=cb)
         
-    avg, best = evaluate_chromosome(chrom, num_games=num_games, seed=seed, render_callbacks=callbacks)
-    return avg, best
+        if my_slot is not None:
+            r, c = my_slot
+            msg_queue.put(('update', r, c, empty_grid, 0, None))
+            slot_queue.put(my_slot)
+            
+        if score > best_score:
+            best_score = score
+        avg_score += score
+        
+    if seed is not None:
+        random.seed()
+        
+    return int(avg_score / num_games), best_score
 
 def run_comparison():
     parser = argparse.ArgumentParser(description="Run Block Game Optimization Comparison")
@@ -158,31 +183,25 @@ def run_comparison():
             import time
             num_games = GAMES_PER_EVAL_GA
             manager = mp.Manager()
-            queue = manager.Queue() if visualizer else None
+            msg_queue = manager.Queue() if visualizer else None
+            slot_queue = manager.Queue() if visualizer else None
+            
+            if visualizer:
+                for r in range(VISUALIZE_GRID_ROWS):
+                    for c in range(VISUALIZE_GRID_COLS):
+                        slot_queue.put((r, c))
             
             tasks = []
-            slots_assigned = 0
-            total_slots = VISUALIZE_GRID_ROWS * VISUALIZE_GRID_COLS
-            
             for c in chromosomes:
-                viz_slots = []
-                for g in range(num_games):
-                    if visualizer and slots_assigned < total_slots:
-                        r = slots_assigned // VISUALIZE_GRID_COLS
-                        col = slots_assigned % VISUALIZE_GRID_COLS
-                        viz_slots.append((r, col))
-                        slots_assigned += 1
-                    else:
-                        viz_slots.append(None)
-                tasks.append((c, num_games, None, viz_slots, queue))
+                tasks.append((c, num_games, None, slot_queue, msg_queue))
 
             with mp.Pool() as pool:
                 async_result = pool.map_async(_ga_worker, tasks)
                 
                 if visualizer:
-                    while not async_result.ready() or not queue.empty():
-                        if not queue.empty():
-                            msg = queue.get()
+                    while not async_result.ready() or not msg_queue.empty():
+                        if not msg_queue.empty():
+                            msg = msg_queue.get()
                             if msg[0] == 'update':
                                 _, r, c, grid, score, pieces = msg
                                 visualizer.update_cell(r, c, grid, score, pieces)
