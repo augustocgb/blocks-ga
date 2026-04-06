@@ -1,7 +1,32 @@
 from genetic_ai import GeneticAlgorithm
 from gradient_ai import GradientDescentAI
 from simulate import evaluate_chromosome, get_best_game_history, reset_best_tracking
+import multiprocessing as mp
 import time
+
+def _ga_worker(args):
+    if len(args) == 5:
+        chrom, num_games, seed, viz_slots, queue = args
+    else:
+        chrom, num_games, seed = args
+        viz_slots, queue = None, None
+        
+    callbacks = []
+    if queue is not None and viz_slots is not None:
+        for i in range(num_games):
+            slot = viz_slots[i] if i < len(viz_slots) else None
+            if slot is not None:
+                r, c = slot
+                def make_cb(row=r, col=c):
+                    return lambda g, s, p: queue.put(('update', row, col, g, s, p))
+                callbacks.append(make_cb())
+            else:
+                callbacks.append(None)
+    else:
+        callbacks = None
+        
+    avg, best = evaluate_chromosome(chrom, num_games=num_games, seed=seed, render_callbacks=callbacks)
+    return avg, best
 
 class HybridOptimizer:
     def __init__(self,
@@ -16,7 +41,8 @@ class HybridOptimizer:
                  sgd_perturbation=0.01,
                  sgd_momentum=0.5,
                  visualizer=None,
-                 realtime_plotter=None):
+                 realtime_plotter=None,
+                 parallel=False):
         
         self.chromosome_length = chromosome_length
         self.ga_pop_size = ga_pop_size
@@ -32,6 +58,7 @@ class HybridOptimizer:
         
         self.visualizer = visualizer
         self.realtime_plotter = realtime_plotter
+        self.parallel = parallel
         self.evaluation_history = []
 
     def run(self):
@@ -42,6 +69,7 @@ class HybridOptimizer:
         print(f"  - Population: {self.ga_pop_size}")
         print(f"  - Generations: {self.ga_generations}")
         print(f"  - Games/Eval: {self.games_per_eval_ga}")
+        print(f"  - Parallel Evaluation: {self.parallel}")
         
         reset_best_tracking()
         
@@ -84,16 +112,21 @@ class HybridOptimizer:
         def evaluate_ga(chrom, num_games=self.games_per_eval_ga, seed=None):
             nonlocal ga_games_visualized
             callbacks = []
-            if self.visualizer and not self.visualizer.is_stopped:
+            if self.visualizer and not self.visualizer.is_stopped and not self.parallel:
+                has_visualized = False
                 for i in range(num_games):
-                    idx = ga_games_visualized % (self.visualizer.rows * self.visualizer.cols)
-                    r = idx // self.visualizer.cols
-                    c = idx % self.visualizer.cols
-                    
-                    def make_cb(row, col):
-                        return lambda g, s, p: self.visualizer.update_cell(row, col, g, s, p)
-                    
-                    callbacks.append(make_cb(r, c))
+                    if not has_visualized and ga_games_visualized < self.visualizer.rows * self.visualizer.cols:
+                        r = ga_games_visualized // self.visualizer.cols
+                        c = ga_games_visualized % self.visualizer.cols
+                        
+                        def make_cb(row=r, col=c):
+                            return lambda g, s, p: self.visualizer.update_cell(row, col, g, s, p)
+                        
+                        callbacks.append(make_cb())
+                        has_visualized = True
+                    else:
+                        callbacks.append(None)
+                if has_visualized:
                     ga_games_visualized += 1
             else:
                 callbacks = None
@@ -101,6 +134,54 @@ class HybridOptimizer:
             avg_score, best_score = evaluate_chromosome(chrom, num_games=num_games, seed=seed, render_callbacks=callbacks)
             self.evaluation_history.append({'chromosome': chrom[:], 'score': avg_score})
             return avg_score, best_score
+
+        def evaluate_ga_batch(chromosomes):
+            import time
+            num_games = self.games_per_eval_ga
+            manager = mp.Manager()
+            queue = manager.Queue() if self.visualizer else None
+            
+            tasks = []
+            slots_assigned = 0
+            total_slots = self.visualizer.rows * self.visualizer.cols if self.visualizer else 0
+            
+            for c in chromosomes:
+                viz_slots = []
+                has_visualized = False
+                for g in range(num_games):
+                    if self.visualizer and not has_visualized and slots_assigned < total_slots:
+                        r = slots_assigned // self.visualizer.cols
+                        col = slots_assigned % self.visualizer.cols
+                        viz_slots.append((r, col))
+                        has_visualized = True
+                    else:
+                        viz_slots.append(None)
+                if has_visualized:
+                    slots_assigned += 1
+                tasks.append((c, num_games, None, viz_slots, queue))
+
+            with mp.Pool() as pool:
+                async_result = pool.map_async(_ga_worker, tasks)
+                
+                if self.visualizer:
+                    while not async_result.ready() or not queue.empty():
+                        if not queue.empty():
+                            msg = queue.get()
+                            if msg[0] == 'update':
+                                _, r, c, grid, score, pieces = msg
+                                self.visualizer.update_cell(r, c, grid, score, pieces)
+                        else:
+                            if not self.visualizer.is_stopped:
+                                self.visualizer.handle_events()
+                            time.sleep(0.01)
+                else:
+                    async_result.wait()
+                    
+                results = async_result.get()
+                
+            for c, (avg, best) in zip(chromosomes, results):
+                self.evaluation_history.append({'chromosome': c[:], 'score': avg})
+            return results
 
         ga = GeneticAlgorithm(
             population_size=self.ga_pop_size,
@@ -110,7 +191,8 @@ class HybridOptimizer:
             elitism_count=2
         )
 
-        best_ga_ind, best_ga_fitness_ind, (ga_gens, ga_best, ga_avg, ga_best_fitness, _, ga_chrom_hist) = ga.run_evolution(evaluate_ga, self.ga_generations, on_gen_start=on_ga_gen_start, on_gen_end=on_ga_gen_end)
+        eval_func = evaluate_ga_batch if self.parallel else evaluate_ga
+        best_ga_ind, best_ga_fitness_ind, (ga_gens, ga_best, ga_avg, ga_best_fitness, _, ga_chrom_hist) = ga.run_evolution(eval_func, self.ga_generations, on_gen_start=on_ga_gen_start, on_gen_end=on_ga_gen_end, parallel=self.parallel)
         
         print("\n" + "-"*60)
         print(f"Phase 1 Complete.")
@@ -126,7 +208,7 @@ class HybridOptimizer:
         print(f"  - Learning Rate: {self.sgd_lr}")
         
         sgd_visualizer = None
-        if self.visualizer:
+        if self.visualizer and not self.parallel:
             from visualizer import RealtimeGridVisualizer
             sgd_visualizer = RealtimeGridVisualizer(1, 1, delay_ms=10)
         

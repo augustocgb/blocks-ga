@@ -3,7 +3,7 @@ import time
 from game_logic import GRID_SIZE, EMPTY_CELL_COLOR
 from simulate import get_best_game_history
 
-pygame.init()
+# Module-level pygame.init() removed to prevent multiprocessing spam
 
 CELL_SIZE = 40
 GRID_LINE_WIDTH = 1

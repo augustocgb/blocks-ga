@@ -88,15 +88,23 @@ class GeneticAlgorithm:
     def initialize_population(self):
         self.population = [self._create_individual() for _ in range(self.population_size)]
 
-    def eval_pop_fitness(self, game_function):
+    def eval_pop_fitness(self, game_function, parallel=False):
         # Reset current best for the generation
         self.best_individual_current = self.population[0]
         
-        for i, individual in enumerate(self.population):
-            individual.fitness, individual.best_score = game_function(individual.chromosome)
-
-            if individual.best_score > self.best_individual_current.best_score:
-                self.best_individual_current = individual
+        if parallel:
+            chromosomes = [ind.chromosome for ind in self.population]
+            results = game_function(chromosomes)
+            for individual, (fitness, best_score) in zip(self.population, results):
+                individual.fitness = fitness
+                individual.best_score = best_score
+                if individual.best_score > self.best_individual_current.best_score:
+                    self.best_individual_current = individual
+        else:
+            for i, individual in enumerate(self.population):
+                individual.fitness, individual.best_score = game_function(individual.chromosome)
+                if individual.best_score > self.best_individual_current.best_score:
+                    self.best_individual_current = individual
 
         # Update best individual across all generations (by max score)
         if (self.best_individual_current.best_score > self.best_individual_all_time.best_score):
@@ -159,21 +167,25 @@ class GeneticAlgorithm:
         self.population = new_population
         return new_population
 
-    def run_evolution(self, game_function, n_generations, on_gen_start=None, on_gen_end=None):
-        print("\nStarting evolution... (Press 's' to stop current phase)")
+    def run_evolution(self, game_function, n_generations, on_gen_start=None, on_gen_end=None, parallel=False):
+        print(f"\nStarting evolution... (Parallel: {parallel}) (Press 's' to stop current phase)")
         self.initialize_population()
         
         best_scores, avg_scores, best_finess, avg_fitness, generations = [], [], [], [], []
         chromosome_history = []
         
+        import time
+        start_time = time.time()
+        
         for gen in range(n_generations):
+            gen_start_time = time.time()
             if on_gen_start:
                 on_gen_start(gen)
                 
             print(f"\n{'='*60}")
             print(f"Generation {gen + 1}/{n_generations}".center(60))
             
-            self.eval_pop_fitness(game_function)
+            self.eval_pop_fitness(game_function, parallel=parallel)
             
             generations.append(gen)
             best_scores.append(self.best_individual_current.best_score)
@@ -183,7 +195,9 @@ class GeneticAlgorithm:
             
             chromosome_history.append([ind.chromosome[:] for ind in self.population])
             
+            gen_time = time.time() - gen_start_time
             print(f"{'='*60}")
+            print(f"Generation Time:                  {gen_time:>10.2f}s")
             print(f"Generation Best Fitness:          {max(ind.fitness for ind in self.population):>10}")
             print(f"Generation Best Score:            {self.best_individual_current.best_score:>10}")
             print(f"Average Fitness:                  {avg_scores[-1]:>10.2f}")
@@ -203,7 +217,8 @@ class GeneticAlgorithm:
 
             self.population = self.new_generation()
 
-        print("\nEvolution completed!")
+        total_time = time.time() - start_time
+        print(f"\nEvolution completed in {total_time:.2f} seconds!")
         
         return self.best_individual_all_time, self.best_fitness_all_time, (generations, best_scores, avg_scores, best_finess, avg_fitness, chromosome_history)
 
